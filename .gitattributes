@@ -1,0 +1,24 @@
+# Ignorera plattformsmappar så GitHub inte tror det är C++-kod
+android/** linguist-vendored
+ios/** linguist-vendored
+macos/** linguist-vendored
+linux/** linguist-vendored
+windows/** linguist-vendored
+
+# Ignorera C/C++- och CMake-filer som Flutter genererar
+**/*.c linguist-vendored
+**/*.cc linguist-vendored
+**/*.cpp linguist-vendored
+**/*.cxx linguist-vendored
+**/*.h linguist-vendored
+**/*.hpp linguist-vendored
+**/CMakeLists.txt linguist-vendored
+**/*.cmake linguist-vendored
+
+# Tvinga GitHub att räkna Dart som huvudspråk
+*.dart linguist-language=Dart
+
+# Ignorera genererade Dart-filer
+**/*.g.dart linguist-generated
+**/*.freezed.dart linguist-generated
+**/*.mocks.dart linguist-generated
