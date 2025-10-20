@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'screens/mood_log_page.dart'; // <--- Importera din sida
+import 'theme/app_theme.dart';
+import 'screens/home_shell.dart';
 
-void main() {
-  runApp(const MoodApp());
-}
+void main() => runApp(const MoodApp());
 
 class MoodApp extends StatelessWidget {
   const MoodApp({super.key});
@@ -13,11 +12,8 @@ class MoodApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Mood Map',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.deepPurple,
-      ),
-      home: const MoodLogPage(), // <--- Din sida visas här
+      theme: appTheme,
+      home: const HomeShell(),
     );
   }
 }
