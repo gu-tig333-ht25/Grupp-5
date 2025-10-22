@@ -40,37 +40,23 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.black,
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Hem'),
-          BottomNavigationBarItem(icon: Icon(Icons.add_circle), label: 'Logga'),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Karta'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: 'Statistik'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
-        ],
-      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // 🧑‍💬 God morgon + väder i rad
+            // God morgon + väderkort
             IntrinsicHeight(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(
-                    child: GreetingCard(userName: userName),
-                  ),
+                  Expanded(child: GreetingCard(userName: userName)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : WeatherCard(
-                            temperature: _weatherData?['main']['temp'],
-                            description: _weatherData?['weather'][0]['description'],
+                            temperature: _weatherData?['main']?['temp'],
+                            description: _weatherData?['weather']?[0]?['description'],
                           ),
                   ),
                 ],
@@ -108,13 +94,13 @@ class _GreetingCardState extends State<GreetingCard> {
   }
 
   void _saveMood() {
-    String moodText = _moodController.text;
-    if (moodText.isNotEmpty) {
+    final mood = _moodController.text.trim();
+    if (mood.isNotEmpty) {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
           title: const Text("Humör sparat"),
-          content: Text('😊 "$moodText"'),
+          content: Text('😊 "$mood"'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -123,17 +109,14 @@ class _GreetingCardState extends State<GreetingCard> {
           ],
         ),
       );
+      _moodController.clear();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
-      ),
+      decoration: _cardDecoration(),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,11 +172,7 @@ class WeatherCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.blue[50],
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
-      ),
+      decoration: _cardDecoration(blue: true),
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
@@ -219,11 +198,7 @@ class MoodCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.yellow[50],
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
-      ),
+      decoration: _cardDecoration(color: Colors.yellow[50]),
       child: const ListTile(
         leading: CircleAvatar(
           backgroundColor: Colors.yellow,
@@ -250,7 +225,9 @@ class ActionButtonsRow extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               padding: const EdgeInsets.symmetric(vertical: 20),
             ),
-            onPressed: () {},
+            onPressed: () {
+              // TODO: Navigera till logga humör
+            },
             child: const Text("Logga humör"),
           ),
         ),
@@ -262,7 +239,9 @@ class ActionButtonsRow extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
               padding: const EdgeInsets.symmetric(vertical: 20),
             ),
-            onPressed: () {},
+            onPressed: () {
+              // TODO: Navigera till karta
+            },
             child: const Text("Visa karta"),
           ),
         ),
@@ -277,11 +256,7 @@ class StatsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
-      ),
+      decoration: _cardDecoration(),
       padding: const EdgeInsets.all(20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -302,4 +277,12 @@ class StatsCard extends StatelessWidget {
       ),
     );
   }
+}
+
+BoxDecoration _cardDecoration({Color? color, bool blue = false}) {
+  return BoxDecoration(
+    color: color ?? (blue ? Colors.blue[50] : Colors.white),
+    borderRadius: BorderRadius.circular(20),
+    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+  );
 }
