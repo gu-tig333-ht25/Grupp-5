@@ -67,11 +67,11 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   void initState() {
     super.initState();
     _pages = [
-      const HomeScreen(),      // Startsida
-      const MoodLogPage(),     // Logga humör
-      const MapScreen(),       // Karta
-      const StatistikPage(),     // Statistik
-      ProfilePage(             // Profil
+      const HomeScreen(),       // Startsida
+      const MoodLogPage(),      // Logga humör
+      const MapScreen(),        // Karta
+      const StatistikPage(),    // Statistik
+      ProfilePage(              // Profil
         isDarkMode: widget.isDarkMode,
         onThemeChanged: widget.onThemeChanged,
       ),
