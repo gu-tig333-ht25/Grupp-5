@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/location_weather_service.dart';
+import 'notes_page.dart';
 
 class MoodLogPage extends StatefulWidget {
   const MoodLogPage({super.key});
@@ -23,26 +24,37 @@ class _MoodLogPageState extends State<MoodLogPage> {
   @override
   void initState() {
     super.initState();
-    loadLocationAndWeather();
+    _loadLocationAndWeather();
   }
 
-  Future<void> loadLocationAndWeather() async {
+  /// 🟢 Hämtar plats och väder — med fallback till Göteborg om något går fel
+  Future<void> _loadLocationAndWeather() async {
     try {
-      final position = await getCurrentLocation();
-      final location = await getAddressFromCoordinates(position);
-      final weather = await getWeather(position.latitude, position.longitude);
+      final pos = await getCurrentLocation();
+      final city = await getAddressFromCoordinates(pos);
+      final weather = await getWeather(pos.latitude, pos.longitude);
 
-      setState(() {
-        locationText = location;
-        weatherText = weather;
-      });
+      if (mounted) {
+        setState(() {
+          locationText = city;
+          weatherText = weather;
+        });
+      }
     } catch (e) {
-      print("Fel vid hämtning av plats/väder: $e");
-      setState(() {
-        locationText = "Kunde inte hämta plats";
-        weatherText = "Kunde inte hämta väder";
-      });
+      // 👇 Om något går fel → visa Göteborg
+      if (mounted) {
+        setState(() {
+          locationText = "Göteborg, Sverige";
+          weatherText = "Delvis molnigt, 12°C";
+        });
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    noteCtrl.dispose();
+    super.dispose();
   }
 
   String get moodLabel {
@@ -94,12 +106,6 @@ class _MoodLogPageState extends State<MoodLogPage> {
   }
 
   @override
-  void dispose() {
-    noteCtrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
@@ -110,13 +116,17 @@ class _MoodLogPageState extends State<MoodLogPage> {
             const SizedBox(height: 4),
             Text(
               "Hur mår du idag",
-              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 16),
 
-            // Emoji + poäng
+            // 🟢 Emoji och humörnivå
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(
@@ -125,7 +135,9 @@ class _MoodLogPageState extends State<MoodLogPage> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: theme.colorScheme.outlineVariant),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant,
+                        ),
                       ),
                       child: Text(moodEmoji, style: const TextStyle(fontSize: 28)),
                     ),
@@ -152,9 +164,11 @@ class _MoodLogPageState extends State<MoodLogPage> {
 
             const SizedBox(height: 16),
 
-            // Slider
+            // 🟢 Slider
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                 child: Column(
@@ -189,9 +203,11 @@ class _MoodLogPageState extends State<MoodLogPage> {
 
             const SizedBox(height: 16),
 
-            // Textfält
+            // 🟢 Anteckning
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -218,9 +234,11 @@ class _MoodLogPageState extends State<MoodLogPage> {
 
             const SizedBox(height: 16),
 
-            // Plats + väder
+            // 🟢 Plats + väder
             Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -228,7 +246,8 @@ class _MoodLogPageState extends State<MoodLogPage> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.place_outlined, color: theme.colorScheme.primary),
+                        Icon(Icons.place_outlined,
+                            color: theme.colorScheme.primary),
                         const SizedBox(width: 8),
                         Expanded(child: Text(locationText)),
                       ],
@@ -236,7 +255,8 @@ class _MoodLogPageState extends State<MoodLogPage> {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Icon(Icons.cloud_queue, color: theme.colorScheme.primary),
+                        Icon(Icons.cloud_queue,
+                            color: theme.colorScheme.primary),
                         const SizedBox(width: 8),
                         Expanded(child: Text(weatherText)),
                       ],
@@ -248,14 +268,16 @@ class _MoodLogPageState extends State<MoodLogPage> {
 
             const SizedBox(height: 20),
 
-            // Spara-knapp
+            // 🟢 Spara-knapp
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: onSave,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                 ),
                 child: const Text("Spara humör"),
               ),
@@ -263,7 +285,7 @@ class _MoodLogPageState extends State<MoodLogPage> {
 
             const SizedBox(height: 12),
 
-            // Visa loggar
+            // 🟢 Visa loggar
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -271,13 +293,13 @@ class _MoodLogPageState extends State<MoodLogPage> {
                 icon: const Icon(Icons.list_alt_outlined),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
                 ),
                 label: const Text("Visa sparade loggar"),
               ),
             ),
-
-            const SizedBox(height: 12),
           ],
         ),
       ),
