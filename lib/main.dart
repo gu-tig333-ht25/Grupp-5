@@ -18,10 +18,18 @@ class MoodMapApp extends StatefulWidget {
 
 class _MoodMapAppState extends State<MoodMapApp> {
   bool _isDarkMode = false;
+  int _rebuildKey = 0; // används för att uppdatera alla sidor vid profilbyte
 
   void _toggleTheme(bool value) {
     setState(() {
       _isDarkMode = value;
+    });
+  }
+
+  // 🔁 Den här kallas från ProfilePage när användaren byter konto
+  void _onProfileChanged() {
+    setState(() {
+      _rebuildKey++;
     });
   }
 
@@ -38,8 +46,10 @@ class _MoodMapAppState extends State<MoodMapApp> {
       darkTheme: ThemeData.dark(useMaterial3: true),
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
       home: MainNavigationPage(
+        key: ValueKey(_rebuildKey), // 👈 tvingar rebuild vid profilbyte
         isDarkMode: _isDarkMode,
         onThemeChanged: _toggleTheme,
+        onProfileChanged: _onProfileChanged,
       ),
     );
   }
@@ -48,11 +58,13 @@ class _MoodMapAppState extends State<MoodMapApp> {
 class MainNavigationPage extends StatefulWidget {
   final bool isDarkMode;
   final Function(bool) onThemeChanged;
+  final VoidCallback onProfileChanged;
 
   const MainNavigationPage({
     super.key,
     required this.isDarkMode,
     required this.onThemeChanged,
+    required this.onProfileChanged,
   });
 
   @override
@@ -61,31 +73,28 @@ class MainNavigationPage extends StatefulWidget {
 
 class _MainNavigationPageState extends State<MainNavigationPage> {
   int _currentIndex = 0;
-  late final List<Widget> _pages;
 
-  @override
-  void initState() {
-    super.initState();
-    _pages = [
-      const HomeScreen(),       // Startsida
-      const MoodLogPage(),      // Logga humör
-      const MapScreen(),        // Karta
-      const StatistikPage(),    // Statistik
-      ProfilePage(              // Profil
-        isDarkMode: widget.isDarkMode,
-        onThemeChanged: widget.onThemeChanged,
-      ),
-    ];
-  }
-
-  void _onItemTapped(int index) {
-    setState(() => _currentIndex = index);
-  }
+  void _onItemTapped(int index) => setState(() => _currentIndex = index);
 
   @override
   Widget build(BuildContext context) {
+    final pages = <Widget>[
+      const HomeScreen(), // 👈 denna rebuildas när _rebuildKey ändras
+      const MoodLogPage(),
+      const MapScreen(),
+      const StatistikPage(),
+      ProfilePage(
+        isDarkMode: widget.isDarkMode,
+        onThemeChanged: widget.onThemeChanged,
+        onProfileChanged: widget.onProfileChanged,
+      ),
+    ];
+
     return Scaffold(
-      body: _pages[_currentIndex],
+      body: IndexedStack(
+        index: _currentIndex,
+        children: pages,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onItemTapped,
