@@ -7,26 +7,42 @@ class StatistikPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+    final cs = theme.colorScheme;
 
     // --- FEJKDATA (byt mot riktig data senare) ---
+    // 0–10 skala på humör
     final last14Days = <double>[4, 6, 5, 7, 6, 8, 7, 5, 6, 7, 6, 7.5, 7, 8];
-    final places = <_PlaceMood>[
-      _PlaceMood('Hemma', 6.2),
-      _PlaceMood('Skola', 5.1),
-      _PlaceMood('Gym', 7.9),
-      _PlaceMood('Café', 7.1),
+
+    // Enkel väderserie lika lång som last14Days:
+    // sun, cloud, rain -> renderas som emoji i grafen
+    final weather = <_Weather>[
+      _Weather.sun,
+      _Weather.cloud,
+      _Weather.sun,
+      _Weather.rain,
+      _Weather.cloud,
+      _Weather.sun,
+      _Weather.sun,
+      _Weather.rain,
+      _Weather.cloud,
+      _Weather.sun,
+      _Weather.cloud,
+      _Weather.sun,
+      _Weather.rain,
+      _Weather.sun,
     ];
+
+    final places = <_PlaceMood>[
+      const _PlaceMood('Hemma', 6.2),
+      const _PlaceMood('Skola', 5.1),
+      const _PlaceMood('Gym', 7.9),
+      const _PlaceMood('Café', 7.1),
+    ];
+
     final heat = List.generate(
-      4,
+      4, // veckor
       (row) => List.generate(7, (col) => (row * 7 + col) % 10 / 10),
     );
-    const avg = 6.8;
-    const count = 24;
-    const common = '😊 Glad';
-    const aiSentiment = 'Övervägande positivt';
-    const aiNote =
-        'Återkommande ord: “plugg”, “träning”, “vänner”. Stress syns inför tentor men lättar efter gympass.';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Statistik'), centerTitle: true),
@@ -34,75 +50,90 @@ class StatistikPage extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
+            // -------- Linjediagram: Humör + väder ----------
             _SectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionTitle(icon: Icons.auto_awesome, text: 'AI-översikt'),
-                  const SizedBox(height: 8),
-                  Row(children: [_Chip(text: aiSentiment)]),
-                  const SizedBox(height: 8),
-                  Text(
-                    aiNote,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.textTheme.bodySmall?.color,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-            _SectionCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _SectionTitle(
+                  const _SectionTitle(
                     icon: Icons.show_chart,
                     text: 'Senaste 14 dagarna',
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 6),
+                  // liten legend för väder
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 4,
+                    children: const [
+                      _LegendDot(label: 'Humör', colorDot: null),
+                      _LegendEmoji(emoji: '☀️', label: 'Sol'),
+                      _LegendEmoji(emoji: '☁️', label: 'Moln'),
+                      _LegendEmoji(emoji: '🌧️', label: 'Regn'),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
                   SizedBox(
-                    height: 160,
+                    height: 200,
                     child: _LineChart(
                       values: last14Days,
-                      stroke: colorScheme.primary,
-                      fill: colorScheme.primary.withOpacity(0.15),
-                      gridColor: theme.dividerColor.withOpacity(.4),
+                      weather: weather,
+                      stroke: cs.primary,
+                      fillTop: cs.primary.withValues(alpha: .10),
+                      fillBottom: cs.primary.withValues(alpha: .00),
+                      gridColor: theme.dividerColor.withValues(alpha: .35),
+                      dotColor: cs.primary,
                     ),
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
+
+            // --------- Humör per plats ----------
             _SectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionTitle(icon: Icons.bar_chart, text: 'Humör per plats'),
+                  const _SectionTitle(
+                    icon: Icons.bar_chart,
+                    text: 'Humör per plats',
+                  ),
                   const SizedBox(height: 8),
                   ...places.map((p) => _PlaceBarRow(place: p)),
                 ],
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
+
+            // --------- Heatmap 4 veckor ----------
             _SectionCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SectionTitle(
+                  const _SectionTitle(
                     icon: Icons.grid_on,
                     text: 'Heatmap (senaste 4 veckor)',
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   _HeatGrid(values: heat),
+                  const SizedBox(height: 6),
+                  Opacity(
+                    opacity: .7,
+                    child: Text(
+                      'Mån  Tis  Ons  Tor  Fre  Lör  Sön',
+                      style: theme.textTheme.labelSmall,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
+
+            // --------- Tre sammanfattningskort ----------
             Row(
               children: const [
                 Expanded(
@@ -112,7 +143,7 @@ class StatistikPage extends StatelessWidget {
                     icon: Icons.emoji_emotions,
                   ),
                 ),
-                SizedBox(width: 8),
+                SizedBox(width: 10),
                 Expanded(
                   child: _SummaryCard(
                     title: 'Inlägg',
@@ -120,7 +151,7 @@ class StatistikPage extends StatelessWidget {
                     icon: Icons.edit_note,
                   ),
                 ),
-                SizedBox(width: 8),
+                SizedBox(width: 10),
                 Expanded(
                   child: _SummaryCard(
                     title: 'Vanligast',
@@ -129,20 +160,6 @@ class StatistikPage extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Export påbörjad (mock)…')),
-                );
-              },
-              icon: const Icon(Icons.file_download),
-              label: const Text('Exportera data'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(48),
-              ),
             ),
           ],
         ),
@@ -159,16 +176,19 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: .4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.06),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: .05),
+            blurRadius: 14,
+            spreadRadius: 1,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -184,9 +204,10 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(
-      context,
-    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700);
+    final style = Theme.of(context).textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w800,
+      letterSpacing: .2,
+    );
     return Row(
       children: [
         Icon(icon, size: 20),
@@ -197,25 +218,47 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _Chip extends StatelessWidget {
-  const _Chip({required this.text});
-  final String text;
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.label, this.colorDot});
+  final String label;
+  final Color? colorDot;
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: cs.primaryContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: cs.onPrimaryContainer,
-          fontWeight: FontWeight.w600,
+    final dotColor = colorDot ?? cs.primary;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          height: 10,
+          width: 10,
+          decoration: BoxDecoration(
+            color: dotColor,
+            borderRadius: BorderRadius.circular(3),
+          ),
         ),
-      ),
+        const SizedBox(width: 6),
+        Text(label, style: Theme.of(context).textTheme.labelSmall),
+      ],
+    );
+  }
+}
+
+class _LegendEmoji extends StatelessWidget {
+  const _LegendEmoji({required this.emoji, required this.label});
+  final String emoji;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(emoji, style: const TextStyle(fontSize: 12)),
+        const SizedBox(width: 4),
+        Text(label, style: Theme.of(context).textTheme.labelSmall),
+      ],
     );
   }
 }
@@ -233,28 +276,31 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
+    final cs = t.colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
-        color: t.colorScheme.surface,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: .4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
+            color: Colors.black.withValues(alpha: .05),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: t.colorScheme.primary),
-          const SizedBox(height: 4),
+          Icon(icon, size: 18, color: cs.primary),
+          const SizedBox(height: 6),
           Text(
             value,
             style: t.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .2,
             ),
           ),
           const SizedBox(height: 2),
@@ -282,32 +328,51 @@ class _PlaceBarRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          SizedBox(width: 72, child: Text(place.name)),
-          const SizedBox(width: 8),
+          SizedBox(
+            width: 72,
+            child: Text(
+              place.name,
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: LayoutBuilder(
               builder: (context, c) {
-                final w = c.maxWidth * (place.value / 10).clamp(0.0, 1.0);
+                final width = c.maxWidth * (place.value / 10).clamp(0.0, 1.0);
                 return Stack(
+                  alignment: Alignment.centerLeft,
                   children: [
                     Container(
-                      height: 12,
+                      height: 14,
                       decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest.withOpacity(.6),
-                        borderRadius: BorderRadius.circular(8),
+                        color: cs.surfaceContainerHighest.withValues(alpha: .6),
+                        borderRadius: BorderRadius.circular(999),
                       ),
                     ),
                     AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      height: 12,
-                      width: w,
+                      duration: const Duration(milliseconds: 350),
+                      height: 14,
+                      width: width,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(999),
                         gradient: LinearGradient(
-                          colors: [cs.primary, cs.primary.withOpacity(.6)],
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
+                          colors: [
+                            cs.primary.withValues(alpha: .90),
+                            cs.primary.withValues(alpha: .55),
+                          ],
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: cs.primary.withValues(alpha: .20),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                     ),
                   ],
@@ -316,14 +381,32 @@ class _PlaceBarRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          SizedBox(
-            width: 36,
-            child: Text(
-              place.value.toStringAsFixed(1),
-              textAlign: TextAlign.right,
-            ),
-          ),
+          _ValuePill(text: place.value.toStringAsFixed(1)),
         ],
+      ),
+    );
+  }
+}
+
+class _ValuePill extends StatelessWidget {
+  const _ValuePill({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: cs.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          color: cs.onSecondaryContainer,
+        ),
       ),
     );
   }
@@ -340,17 +423,18 @@ class _HeatGrid extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return AspectRatio(
       aspectRatio: 7 / 3,
-      child: Column(
-        children: values
-            .map(
-              (row) => Expanded(
-                child: Row(
-                  children: row
-                      .map(
-                        (v) => Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(2),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Column(
+          children: values
+              .map(
+                (row) => Expanded(
+                  child: Row(
+                    children: row
+                        .map(
+                          (v) => Expanded(
                             child: Container(
+                              margin: const EdgeInsets.all(2),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(6),
                                 color: Color.lerp(
@@ -361,83 +445,121 @@ class _HeatGrid extends StatelessWidget {
                               ),
                             ),
                           ),
-                        ),
-                      )
-                      .toList(),
+                        )
+                        .toList(),
+                  ),
                 ),
-              ),
-            )
-            .toList(),
+              )
+              .toList(),
+        ),
       ),
     );
   }
 }
 
-/* --------------------------------- LineChart ------------------------------- */
+/* --------------------------- LineChart (med väder) -------------------------- */
+
+enum _Weather { sun, cloud, rain }
 
 class _LineChart extends StatelessWidget {
   const _LineChart({
     required this.values,
+    required this.weather,
     required this.stroke,
-    required this.fill,
+    required this.fillTop,
+    required this.fillBottom,
     required this.gridColor,
+    required this.dotColor,
   });
 
   final List<double> values; // skala 0–10
+  final List<_Weather> weather;
   final Color stroke;
-  final Color fill;
+  final Color fillTop;
+  final Color fillBottom;
   final Color gridColor;
+  final Color dotColor;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _LineChartPainter(values, stroke, fill, gridColor),
+      painter: _LineChartPainter(
+        values: values,
+        weather: weather,
+        stroke: stroke,
+        fillTop: fillTop,
+        fillBottom: fillBottom,
+        gridColor: gridColor,
+        dotColor: dotColor,
+        textStyle: Theme.of(
+          context,
+        ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
+      ),
       child: const SizedBox.expand(),
     );
   }
 }
 
 class _LineChartPainter extends CustomPainter {
-  _LineChartPainter(this.values, this.stroke, this.fill, this.gridColor);
+  _LineChartPainter({
+    required this.values,
+    required this.weather,
+    required this.stroke,
+    required this.fillTop,
+    required this.fillBottom,
+    required this.gridColor,
+    required this.dotColor,
+    required this.textStyle,
+  });
 
   final List<double> values;
+  final List<_Weather> weather;
   final Color stroke;
-  final Color fill;
+  final Color fillTop;
+  final Color fillBottom;
   final Color gridColor;
+  final Color dotColor;
+  final TextStyle? textStyle;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (values.isEmpty) return;
 
-    final padding = 12.0;
-    final chartRect = Rect.fromLTWH(
+    const padding = 16.0;
+    final rect = Rect.fromLTWH(
       padding,
       padding,
       size.width - padding * 2,
       size.height - padding * 2,
     );
 
-    // grid
+    // --- Grid (horisontella linjer) + y-etiketter 0,5,10 ---
     final gridPaint = Paint()
       ..color = gridColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
     for (int i = 0; i <= 4; i++) {
-      final dy = chartRect.top + chartRect.height * i / 4;
-      canvas.drawLine(
-        Offset(chartRect.left, dy),
-        Offset(chartRect.right, dy),
-        gridPaint,
-      );
+      final dy = rect.top + rect.height * i / 4;
+      canvas.drawLine(Offset(rect.left, dy), Offset(rect.right, dy), gridPaint);
     }
+    _drawLabel(canvas, '10', Offset(rect.left - 10, rect.top - 6));
+    _drawLabel(
+      canvas,
+      '5',
+      Offset(rect.left - 10, rect.top + rect.height / 2 - 6),
+    );
+    _drawLabel(canvas, '0', Offset(rect.left - 10, rect.bottom - 6));
 
-    // line path
-    final maxY = 10.0;
-    final stepX = chartRect.width / (values.length - 1);
+    // --- Linjeväg ---
+    const maxY = 10.0;
+    final stepX = rect.width / (values.length - 1);
     final path = Path();
+    final points = <Offset>[];
+
     for (int i = 0; i < values.length; i++) {
-      final x = chartRect.left + stepX * i;
-      final y = chartRect.bottom - (values[i] / maxY) * chartRect.height;
+      final x = rect.left + stepX * i;
+      final y = rect.bottom - (values[i] / maxY) * rect.height;
+      points.add(Offset(x, y));
       if (i == 0) {
         path.moveTo(x, y);
       } else {
@@ -445,36 +567,84 @@ class _LineChartPainter extends CustomPainter {
       }
     }
 
-    // fill
+    // --- Area-fill (vertikal gradient) ---
     final fillPath = Path.from(path)
-      ..lineTo(chartRect.right, chartRect.bottom)
-      ..lineTo(chartRect.left, chartRect.bottom)
+      ..lineTo(rect.right, rect.bottom)
+      ..lineTo(rect.left, rect.bottom)
       ..close();
-    final fillPaint = Paint()..color = fill;
+
+    final shader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [fillTop, fillBottom],
+    ).createShader(rect);
+
+    final fillPaint = Paint()..shader = shader;
     canvas.drawPath(fillPath, fillPaint);
 
-    // stroke
+    // --- Stroke ---
     final linePaint = Paint()
       ..color = stroke
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
+      ..strokeWidth = 2.6
       ..isAntiAlias = true;
     canvas.drawPath(path, linePaint);
 
-    // dots
-    final dotPaint = Paint()..color = stroke;
+    // --- Dots + väderemoji under varje punkt ---
+    final dotPaint = Paint()..color = dotColor;
+    for (int i = 0; i < points.length; i++) {
+      final p = points[i];
+      canvas.drawCircle(p, 3.0, dotPaint);
+
+      final emoji = switch (weather[i]) {
+        _Weather.sun => '☀️',
+        _Weather.cloud => '☁️',
+        _Weather.rain => '🌧️',
+      };
+
+      final tp = TextPainter(
+        text: TextSpan(text: emoji, style: textStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+
+      // placera strax under datapunkten, men inte under diagrammet
+      final emojiOffset = Offset(
+        p.dx - tp.width / 2,
+        (p.dy + 12).clamp(rect.top, rect.bottom - tp.height),
+      );
+      tp.paint(canvas, emojiOffset);
+    }
+
+    // --- x-etiketter (glest för läsbarhet) ---
     for (int i = 0; i < values.length; i++) {
-      final x = chartRect.left + stepX * i;
-      final y = chartRect.bottom - (values[i] / maxY) * chartRect.height;
-      canvas.drawCircle(Offset(x, y), 2.5, dotPaint);
+      if (i % 3 != 0) continue;
+      final label = 'd${i + 1}';
+      final tp = TextPainter(
+        text: TextSpan(text: label, style: textStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final pos = Offset(rect.left + stepX * i - tp.width / 2, rect.bottom + 4);
+      tp.paint(canvas, pos);
     }
   }
 
+  void _drawLabel(Canvas canvas, String text, Offset pos) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, pos);
+  }
+
   @override
-  bool shouldRepaint(covariant _LineChartPainter oldDelegate) {
-    return oldDelegate.values != values ||
-        oldDelegate.stroke != stroke ||
-        oldDelegate.fill != fill ||
-        oldDelegate.gridColor != gridColor;
+  bool shouldRepaint(covariant _LineChartPainter old) {
+    return old.values != values ||
+        old.weather != weather ||
+        old.stroke != stroke ||
+        old.fillTop != fillTop ||
+        old.fillBottom != fillBottom ||
+        old.gridColor != gridColor ||
+        old.dotColor != dotColor ||
+        old.textStyle != textStyle;
   }
 }

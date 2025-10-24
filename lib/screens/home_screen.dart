@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/weather_service.dart';
+import '../services/local_profiles.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -9,8 +10,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final String userName = "Alex";
   final WeatherService _weatherService = WeatherService();
+  final _profiles = LocalProfiles();
 
   Map<String, dynamic>? _weatherData;
   bool _isLoading = true;
@@ -29,34 +30,50 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Fel vid hämtning av väderdata: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      debugPrint('Fel vid hämtning av väderdata: $e');
+      setState(() => _isLoading = false);
     }
+  }
+
+  // Hämta aktuellt användarnamn från LocalProfiles
+  Future<String> _getCurrentUserName() async {
+    final id = await _profiles.getCurrentUserId() ?? 'alex';
+    final all = await _profiles.getAllProfiles();
+    return (all[id]?['name'] as String?) ?? 'Användare';
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: cs.background,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // God morgon + väderkort
+            // Hälsning + väder
             IntrinsicHeight(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: GreetingCard(userName: userName)),
+                  Expanded(
+                    child: FutureBuilder<String>(
+                      future: _getCurrentUserName(),
+                      builder: (context, snap) {
+                        final name = snap.data ?? '…';
+                        return GreetingCard(userName: name);
+                      },
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _isLoading
                         ? const Center(child: CircularProgressIndicator())
                         : WeatherCard(
                             temperature: _weatherData?['main']?['temp'],
-                            description: _weatherData?['weather']?[0]?['description'],
+                            description:
+                                _weatherData?['weather']?[0]?['description'],
                           ),
                   ),
                 ],
@@ -77,11 +94,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class GreetingCard extends StatefulWidget {
   final String userName;
-
   const GreetingCard({super.key, required this.userName});
 
   @override
-  _GreetingCardState createState() => _GreetingCardState();
+  State<GreetingCard> createState() => _GreetingCardState();
 }
 
 class _GreetingCardState extends State<GreetingCard> {
@@ -115,29 +131,48 @@ class _GreetingCardState extends State<GreetingCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final tt = theme.textTheme;
+
     return Container(
-      decoration: _cardDecoration(),
+      decoration: _cardDecoration(context),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("☀️ God morgon,", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          Text(widget.userName, style: const TextStyle(fontSize: 16)),
+          Text("☀️ God morgon,",
+              style: tt.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: cs.onSurface,
+              )),
+          Text(widget.userName,
+              style: tt.titleSmall?.copyWith(
+                color: cs.onSurfaceVariant,
+              )),
           const SizedBox(height: 10),
           TextField(
             controller: _moodController,
             decoration: InputDecoration(
               hintText: "Hur mår du idag?",
               filled: true,
-              fillColor: Colors.grey[100],
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              fillColor: cs.surfaceVariant,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: cs.outline),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: cs.primary),
+              ),
             ),
           ),
           const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerRight,
-            child: ElevatedButton(
+            child: FilledButton(
               onPressed: _saveMood,
               child: const Text("Spara"),
             ),
@@ -171,21 +206,33 @@ class WeatherCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Container(
-      decoration: _cardDecoration(blue: true),
+      decoration: _cardDecoration(context, color: cs.primaryContainer),
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           CircleAvatar(
-            backgroundColor: Colors.blue[100],
-            child: Icon(getWeatherIcon(description), color: Colors.blue[800], size: 30),
+            backgroundColor: cs.onPrimaryContainer.withOpacity(0.15),
+            child: Icon(getWeatherIcon(description),
+                color: cs.onPrimaryContainer, size: 30),
           ),
           const SizedBox(height: 8),
           Text(
             temperature != null ? "${temperature!.toStringAsFixed(1)}°C" : "Laddar...",
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: tt.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: cs.onPrimaryContainer,
+            ),
           ),
-          Text(description ?? "", style: const TextStyle(fontSize: 14)),
+          Text(
+            description ?? "",
+            style: tt.bodyMedium?.copyWith(
+              color: cs.onPrimaryContainer.withOpacity(.9),
+            ),
+          ),
         ],
       ),
     );
@@ -197,15 +244,24 @@ class MoodCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Container(
-      decoration: _cardDecoration(color: Colors.yellow[50]),
-      child: const ListTile(
+      decoration: _cardDecoration(context, color: cs.secondaryContainer),
+      child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Colors.yellow,
-          child: Text("😊", style: TextStyle(fontSize: 24)),
+          backgroundColor: cs.onSecondaryContainer.withOpacity(.2),
+          child: Text("😊", style: tt.titleLarge),
         ),
-        title: Text("Glad · för 2 timmar sedan"),
-        subtitle: Text("Hade ett trevligt fika med en vän"),
+        title: Text("Glad · för 2 timmar sedan",
+            style: tt.titleMedium?.copyWith(color: cs.onSecondaryContainer)),
+        subtitle: Text(
+          "Hade ett trevligt fika med en vän",
+          style: tt.bodyMedium?.copyWith(
+            color: cs.onSecondaryContainer.withOpacity(.85),
+          ),
+        ),
       ),
     );
   }
@@ -219,30 +275,26 @@ class ActionButtonsRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.pinkAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              padding: const EdgeInsets.symmetric(vertical: 20),
-            ),
+          child: FilledButton(
             onPressed: () {
               // TODO: Navigera till logga humör
             },
-            child: const Text("Logga humör"),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Text("Logga humör"),
+            ),
           ),
         ),
         const SizedBox(width: 20),
         Expanded(
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blueAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              padding: const EdgeInsets.symmetric(vertical: 20),
-            ),
+          child: FilledButton.tonal(
             onPressed: () {
               // TODO: Navigera till karta
             },
-            child: const Text("Visa karta"),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 14),
+              child: Text("Visa karta"),
+            ),
           ),
         ),
       ],
@@ -255,34 +307,51 @@ class StatsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    Widget col(String title, String value) => Column(
+          children: [
+            Text(value,
+                style: tt.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: cs.onSurface,
+                )),
+            const SizedBox(height: 4),
+            Text(title,
+                style: tt.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                )),
+          ],
+        );
+
     return Container(
-      decoration: _cardDecoration(),
+      decoration: _cardDecoration(context),
       padding: const EdgeInsets.all(20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: const [
-          Column(children: [
-            Text("7", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            Text("Inloggningar")
-          ]),
-          Column(children: [
-            Text("7.2", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            Text("Snitthumör")
-          ]),
-          Column(children: [
-            Text("😊", style: TextStyle(fontSize: 22)),
-            Text("Vanligast")
-          ]),
+        children: [
+          col("Inloggningar", "7"),
+          col("Snitthumör", "7.2"),
+          col("Vanligast", "😊"),
         ],
       ),
     );
   }
 }
 
-BoxDecoration _cardDecoration({Color? color, bool blue = false}) {
+/// Temaanpassad kort-dekoration
+BoxDecoration _cardDecoration(BuildContext context, {Color? color}) {
+  final cs = Theme.of(context).colorScheme;
   return BoxDecoration(
-    color: color ?? (blue ? Colors.blue[50] : Colors.white),
+    color: color ?? cs.surface,
     borderRadius: BorderRadius.circular(20),
-    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+    boxShadow: [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.06),
+        blurRadius: 10,
+        offset: const Offset(0, 6),
+      ),
+    ],
   );
 }
