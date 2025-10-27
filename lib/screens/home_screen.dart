@@ -8,7 +8,7 @@ import '../services/mood_store.dart';
 import '../models/mood_entry.dart';
 import 'map_screen.dart';
 import 'mood_log_page.dart';
-import 'quiz_screen.dart'; // 👈 se till att filen finns
+import 'quiz_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,7 +19,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _profiles = LocalProfiles();
-  final _homeLocation = const LatLng(57.7089, 11.9746); // Göteborg (fallback)
+  final _homeLocation = const LatLng(57.7089, 11.9746);
   Weather? _weather;
   bool _isLoading = true;
 
@@ -39,7 +39,6 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      debugPrint('Fel vid hämtning av väderdata: $e');
       setState(() => _isLoading = false);
     }
   }
@@ -77,7 +76,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             final weather = _weather ??
                                 Weather(temperatureC: 0, windSpeed: 0, weatherCode: 3);
                             final entry = MoodEntry(
-                              kind: EntryKind.home, // 👈 viktigt: hemlogg
+                              kind: EntryKind.home,
                               emoji: "🙂",
                               note: note.trim().isEmpty ? '(Ingen anteckning)' : note.trim(),
                               date: DateTime.now(),
@@ -107,21 +106,9 @@ class _HomeScreenState extends State<HomeScreen> {
             MoodCard(latest: last),
             const SizedBox(height: 20),
             ActionButtonsRow(
-              onOpenLog: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const MoodLogScreen()),
-                );
-              },
-              onOpenMap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const MapScreen()),
-                );
-              },
-              onOpenQuiz: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const QuizScreen()),
-                );
-              },
+              onOpenLog: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MoodLogScreen())),
+              onOpenMap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapScreen())),
+              onOpenQuiz: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const QuizScreen())),
             ),
             const SizedBox(height: 20),
             const StatsCard(),
@@ -136,11 +123,7 @@ class GreetingCard extends StatefulWidget {
   final String userName;
   final Future<void> Function(String) onQuickSave;
 
-  const GreetingCard({
-    super.key,
-    required this.userName,
-    required this.onQuickSave,
-  });
+  const GreetingCard({super.key, required this.userName, required this.onQuickSave});
 
   @override
   State<GreetingCard> createState() => _GreetingCardState();
@@ -181,14 +164,8 @@ class _GreetingCardState extends State<GreetingCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text("☀️ God morgon,",
-              style: tt.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: cs.onSurface,
-              )),
-          Text(widget.userName,
-              style: tt.titleSmall?.copyWith(
-                color: cs.onSurfaceVariant,
-              )),
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: cs.onSurface)),
+          Text(widget.userName, style: tt.titleSmall?.copyWith(color: cs.onSurfaceVariant)),
           const SizedBox(height: 10),
           TextField(
             controller: _moodController,
@@ -196,8 +173,7 @@ class _GreetingCardState extends State<GreetingCard> {
               hintText: "Hur mår du idag?",
               filled: true,
               fillColor: cs.surfaceVariant,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
                 borderSide: BorderSide(color: cs.outline),
@@ -224,7 +200,6 @@ class _GreetingCardState extends State<GreetingCard> {
 
 class WeatherCard extends StatelessWidget {
   final Weather? weather;
-
   const WeatherCard({super.key, required this.weather});
 
   IconData _iconFromWeather(Weather? w) {
@@ -251,24 +226,16 @@ class WeatherCard extends StatelessWidget {
         children: [
           CircleAvatar(
             backgroundColor: cs.onPrimaryContainer.withOpacity(0.15),
-            child: Icon(_iconFromWeather(weather),
-                color: cs.onPrimaryContainer, size: 30),
+            child: Icon(_iconFromWeather(weather), color: cs.onPrimaryContainer, size: 30),
           ),
           const SizedBox(height: 8),
           Text(
-            weather != null
-                ? "${weather!.temperatureC.toStringAsFixed(1)}°C"
-                : "Laddar...",
-            style: tt.titleLarge?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: cs.onPrimaryContainer,
-            ),
+            weather != null ? "${weather!.temperatureC.toStringAsFixed(1)}°C" : "Laddar...",
+            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: cs.onPrimaryContainer),
           ),
           Text(
             weather?.shortDescription ?? "",
-            style: tt.bodyMedium?.copyWith(
-              color: cs.onPrimaryContainer.withOpacity(.9),
-            ),
+            style: tt.bodyMedium?.copyWith(color: cs.onPrimaryContainer.withOpacity(.9)),
           ),
         ],
       ),
@@ -285,10 +252,7 @@ class MoodCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    final title = latest == null
-        ? "Inget loggat ännu"
-        : "${latest!.emoji} · senast ${_formatAgo(latest!.date)}";
-
+    final title = latest == null ? "Inget loggat ännu" : "${latest!.emoji} · senast ${_formatAgo(latest!.date)}";
     final subtitle = latest?.note ?? "Tryck “Logga humör” för att börja.";
 
     return Container(
@@ -298,13 +262,10 @@ class MoodCard extends StatelessWidget {
           backgroundColor: cs.onSecondaryContainer.withOpacity(.2),
           child: Text(latest?.emoji ?? "😊", style: tt.titleLarge),
         ),
-        title: Text(title,
-            style: tt.titleMedium?.copyWith(color: cs.onSecondaryContainer)),
+        title: Text(title, style: tt.titleMedium?.copyWith(color: cs.onSecondaryContainer)),
         subtitle: Text(
           subtitle,
-          style: tt.bodyMedium?.copyWith(
-            color: cs.onSecondaryContainer.withOpacity(.85),
-          ),
+          style: tt.bodyMedium?.copyWith(color: cs.onSecondaryContainer.withOpacity(.85)),
         ),
       ),
     );
@@ -324,12 +285,7 @@ class ActionButtonsRow extends StatelessWidget {
   final VoidCallback onOpenMap;
   final VoidCallback onOpenQuiz;
 
-  const ActionButtonsRow({
-    super.key,
-    required this.onOpenLog,
-    required this.onOpenMap,
-    required this.onOpenQuiz,
-  });
+  const ActionButtonsRow({super.key, required this.onOpenLog, required this.onOpenMap, required this.onOpenQuiz});
 
   @override
   Widget build(BuildContext context) {
@@ -342,13 +298,8 @@ class ActionButtonsRow extends StatelessWidget {
             backgroundColor: cs.primaryContainer,
             foregroundColor: cs.onPrimaryContainer,
             padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-            textStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),
           onPressed: onPressed,
           child: Text(text, textAlign: TextAlign.center),
@@ -384,10 +335,7 @@ class StatsCard extends StatelessWidget {
                   color: cs.onSurface,
                 )),
             const SizedBox(height: 4),
-            Text(title,
-                style: tt.bodySmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                )),
+            Text(title, style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
           ],
         );
 
@@ -406,7 +354,6 @@ class StatsCard extends StatelessWidget {
   }
 }
 
-/// Temaanpassad kort-dekoration
 BoxDecoration _cardDecoration(BuildContext context, {Color? color}) {
   final cs = Theme.of(context).colorScheme;
   return BoxDecoration(
