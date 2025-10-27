@@ -1,7 +1,8 @@
-// lib/screens/profil.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/local_profiles.dart';
 import '../services/select_profile.dart';
+import '../services/mood_store.dart';
 
 class ProfilePage extends StatefulWidget {
   final bool isDarkMode;
@@ -21,7 +22,7 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   final store = LocalProfiles();
-  String? currentUserId; // 'alex' | 'maya' | null
+  String? currentUserId;
   Map<String, Map<String, dynamic>> profiles = {};
 
   @override
@@ -43,7 +44,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Map<String, dynamic>? get currentProfile =>
       currentUserId == null ? null : profiles[currentUserId];
 
-  /// Öppnar sidan där man väljer profil (Alex/Maya).
+  /// 🔁 Byt användare
   Future<void> _chooseAccount() async {
     final selected = await Navigator.of(context).push<String>(
       MaterialPageRoute(
@@ -53,13 +54,20 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
       ),
     );
+
     if (selected != null) {
       await store.setCurrentUserId(selected);
       final all = await store.getAllProfiles();
+
+      // Uppdatera aktuell användare och ladda rätt loggar
       setState(() {
         profiles = all;
         currentUserId = selected;
       });
+
+      // 👇 Detta gör att loggar byts direkt när man byter profil
+      await context.read<MoodStore>().switchUser(selected);
+
       widget.onProfileChanged();
     }
   }
@@ -72,7 +80,7 @@ class _ProfilePageState extends State<ProfilePage> {
         content: const Text(
           'MoodMap hjälper dig att reflektera över hur plats och miljö påverkar ditt välmående. '
           'Genom att logga ditt humör på olika platser får du en personlig karta över ditt mående '
-          'där du kan upptäcka mönster och se hur olika miljöer påverkar dig.\n\n',
+          'och kan se mönster över tid.',
         ),
         actions: [
           TextButton(
@@ -102,22 +110,20 @@ class _ProfilePageState extends State<ProfilePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // 🔁 Logga ut / Byt konto (öppnar välj-sidan)
                   Align(
                     alignment: Alignment.centerRight,
                     child: OutlinedButton.icon(
                       onPressed: _chooseAccount,
                       icon: const Icon(Icons.logout),
-                      label: const Text('Logga ut / Byt konto'),
+                      label: const Text('Byt konto'),
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // ✅ Visa aktiv användare
                   if (cp != null) ...[
                     CircleAvatar(
                       radius: 50,
-                      backgroundColor: Colors.purpleAccent.shade100,
+                      backgroundColor: Colors.blueAccent.shade100,
                       child: const Icon(Icons.person, size: 60, color: Colors.white),
                     ),
                     const SizedBox(height: 12),
@@ -129,29 +135,23 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      cp['email'] ?? '',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
+                    Text(cp['email'] ?? '', style: TextStyle(color: Colors.grey[600])),
                     const SizedBox(height: 24),
                   ] else ...[
-                    const SizedBox(height: 24),
                     const Text('Ingen profil vald'),
                     const SizedBox(height: 8),
                     FilledButton(
                       onPressed: _chooseAccount,
                       child: const Text('Välj profil'),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
                   ],
 
-                  // ⚙️ Inställningar (tema + information)
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       'Inställningar',
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -191,17 +191,13 @@ class _ProfilePageState extends State<ProfilePage> {
                               color: theme.colorScheme.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(16),
                             ),
-                            child: Row(
+                            child: const Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.info_outline,
+                                Icon(Icons.info_outline,
                                     color: Colors.deepPurpleAccent, size: 26),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Information',
-                                  style: theme.textTheme.bodyMedium
-                                      ?.copyWith(fontWeight: FontWeight.w500),
-                                ),
+                                SizedBox(width: 8),
+                                Text('Information'),
                               ],
                             ),
                           ),
@@ -210,7 +206,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     ],
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 32),
                   const SupportHelpCard(),
                 ],
               ),
@@ -219,7 +215,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 }
 
-// ---------- Krisinfo-kort (nu klickbara nummer + dialog Ring/Avbryt) ----------
+// ---------- Hjälpkort för stöd ----------
 class SupportHelpCard extends StatelessWidget {
   const SupportHelpCard({super.key});
 
@@ -331,107 +327,9 @@ class SupportHelpCard extends StatelessWidget {
     );
 
     if (shouldCall == true) {
-      // Fejkad "ringer..."-skärm
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => FakeCallPage(title: title, number: number),
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Ringer $number... (simulerat)')),
       );
     }
-  }
-}
-
-// -------- Fejk-samtalsskärm + enkel Ticker --------
-class FakeCallPage extends StatefulWidget {
-  final String title;
-  final String number;
-  const FakeCallPage({super.key, required this.title, required this.number});
-
-  @override
-  State<FakeCallPage> createState() => _FakeCallPageState();
-}
-
-class _FakeCallPageState extends State<FakeCallPage> {
-  late final Stopwatch _sw;
-  late final Ticker _ticker;
-
-  @override
-  void initState() {
-    super.initState();
-    _sw = Stopwatch()..start();
-    _ticker = Ticker(() {
-      if (mounted) setState(() {});
-    })..start();
-  }
-
-  @override
-  void dispose() {
-    _ticker.dispose();
-    _sw.stop();
-    super.dispose();
-  }
-
-  String get _elapsed {
-    final s = _sw.elapsed.inSeconds;
-    final mm = (s ~/ 60).toString().padLeft(2, '0');
-    final ss = (s % 60).toString().padLeft(2, '0');
-    return '$mm:$ss';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Scaffold(
-      appBar: AppBar(title: const Text('Ringer...')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              radius: 42,
-              backgroundColor: cs.primaryContainer,
-              child: const Icon(Icons.phone, size: 36),
-            ),
-            const SizedBox(height: 12),
-            Text(widget.title,
-                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text(widget.number, style: tt.bodyMedium),
-            const SizedBox(height: 12),
-            Text(_elapsed, style: tt.titleMedium),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.call_end),
-              label: const Text('Lägg på'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class Ticker {
-  Ticker(this.onTick);
-  final VoidCallback onTick;
-  bool _running = false;
-
-  void start() {
-    if (_running) return;
-    _running = true;
-    _tick();
-  }
-
-  void _tick() async {
-    while (_running) {
-      await Future<void>.delayed(const Duration(seconds: 1));
-      onTick();
-    }
-  }
-
-  void dispose() {
-    _running = false;
   }
 }

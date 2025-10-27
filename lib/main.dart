@@ -1,12 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
+
+import 'services/mood_store.dart';
 import 'screens/home_screen.dart';
 import 'screens/mood_log_page.dart';
 import 'screens/map_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/profil.dart';
 
-void main() {
-  runApp(const MoodMapApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('sv_SE');
+
+  // 🧠 Initiera MoodStore (med profiler)
+  final store = MoodStore();
+  await store.load();
+
+  runApp(
+    ChangeNotifierProvider.value(
+      value: store,
+      child: const MoodMapApp(),
+    ),
+  );
 }
 
 class MoodMapApp extends StatefulWidget {
@@ -26,7 +43,7 @@ class _MoodMapAppState extends State<MoodMapApp> {
     });
   }
 
-  // 🔁 Den här kallas från ProfilePage när användaren byter konto
+  // 🔁 Kallas från ProfilePage när användaren byter konto
   void _onProfileChanged() {
     setState(() {
       _rebuildKey++;
@@ -46,7 +63,7 @@ class _MoodMapAppState extends State<MoodMapApp> {
       darkTheme: ThemeData.dark(useMaterial3: true),
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
       home: MainNavigationPage(
-        key: ValueKey(_rebuildKey), // 👈 tvingar rebuild vid profilbyte
+        key: ValueKey(_rebuildKey),
         isDarkMode: _isDarkMode,
         onThemeChanged: _toggleTheme,
         onProfileChanged: _onProfileChanged,
@@ -79,8 +96,8 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
-      const HomeScreen(), // 👈 denna rebuildas när _rebuildKey ändras
-      const MoodLogPage(),
+      const HomeScreen(),
+      const MoodLogScreen(),
       const MapScreen(),
       const StatistikPage(),
       ProfilePage(
@@ -91,10 +108,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
-      ),
+      body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onItemTapped,
