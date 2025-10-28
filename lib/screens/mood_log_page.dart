@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/location_weather_service.dart';
 import 'notes_page.dart';
-
 import '../services/mood_store.dart';
 import '../models/mood_entry.dart';
 import '../services/weather_service.dart';
@@ -19,12 +18,10 @@ class MoodLogScreen extends StatefulWidget {
 }
 
 class _MoodLogScreenState extends State<MoodLogScreen> {
-  // ---- Quick log (överst) ----
   static const LatLng _fallbackCenter = LatLng(57.7089, 11.9746); // Göteborg
   Weather? _weather;
   bool _loadingWeather = true;
 
-  // ---- Legacy-delen ----
   static const _legacyKey = 'mood_logs';
   final List<_LegacyLog> _legacy = [];
   bool _loadingLegacy = true;
@@ -85,7 +82,7 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
       for (final l in _legacy) {
         final parsed = _parseLegacyWeather(l.weather);
         final entry = MoodEntry(
-          kind: EntryKind.map, // tolka gamla som kartloggar
+          kind: EntryKind.map,
           emoji: _emojiFromScore(l.mood),
           note: l.note.isEmpty ? '(Ingen anteckning)' : l.note,
           date: l.createdAt ?? DateTime.now(),
@@ -101,7 +98,7 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
       if (!mounted) return;
       setState(() => _legacy.clear());
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gamla poster har migrerats ✅')),
+        const SnackBar(content: Text('Gamla poster har migrerats')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -113,11 +110,10 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
     }
   }
 
-  // Quick save från rutan längst upp
   Future<void> _onQuickSave(String note) async {
     final weather = _weather ?? Weather(temperatureC: 0, windSpeed: 0, weatherCode: 3);
     final entry = MoodEntry(
-      kind: EntryKind.home, // 👈 hemlogg
+      kind: EntryKind.home,
       emoji: '🙂',
       note: note.trim().isEmpty ? '(Ingen anteckning)' : note.trim(),
       date: DateTime.now(),
@@ -127,7 +123,7 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
     await context.read<MoodStore>().add(entry);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Humör sparat ✅')),
+      const SnackBar(content: Text('Humör sparat')),
     );
   }
 
@@ -135,71 +131,66 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
   Widget build(BuildContext context) {
     final allEntries = context.watch<MoodStore>().entries.reversed.toList();
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
 
-    // Dela upp loggar efter typ
     final homeEntries = allEntries.where((e) => e.kind == EntryKind.home).toList();
-    final mapEntries  = allEntries.where((e) => e.kind == EntryKind.map ).toList();
-
+    final mapEntries = allEntries.where((e) => e.kind == EntryKind.map).toList();
     final legacyCount = _legacy.length;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Humörlogg')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // ---------- Quick log-kort ----------
-          _QuickLogCard(
-            isLoadingWeather: _loadingWeather,
-            onSave: _onQuickSave,
-          ),
-
-          const SizedBox(height: 20),
-
-          // 🏠 Hemloggar (utan emoji)
-          _SectionHeader(text: 'Hemloggar (${homeEntries.length})'),
-          if (homeEntries.isEmpty)
-            const _EmptyHint(text: 'Inga hem-loggar ännu.')
-          else
-            ...homeEntries.map((m) => _EntryCard.fromMoodEntry(m, theme)),
-
-          const SizedBox(height: 24),
-
-          // 🗺️ Kartloggar (med emoji)
-          _SectionHeader(text: 'Kartloggar (${mapEntries.length})'),
-          if (mapEntries.isEmpty)
-            const _EmptyHint(text: 'Inga kartloggar ännu.')
-          else
-            ...mapEntries.map((m) => _EntryCard.fromMoodEntry(m, theme)),
-
-          const SizedBox(height: 24),
-
-          // ⏳ Gamla (legacy)
-          _SectionHeader(text: 'Gamla loggar ($legacyCount)'),
-          if (_loadingLegacy)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            )
-          else if (legacyCount == 0)
-            const _EmptyHint(text: 'Inga gamla poster hittades.')
-          else
-            ..._legacy.map((l) => _EntryCard.fromLegacy(l, theme)),
-
-          if (legacyCount > 0) ...[
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _migrating ? null : _migrateLegacyToStore,
-              icon: _migrating
-                  ? const SizedBox(
-                      height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.publish),
-              label: Text(_migrating ? 'Migrerar gamla poster…' : 'Migrera gamla poster'),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(), // Stänger tangentbordet vid tryck utanför
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Humörlogg')),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _QuickLogCard(
+              isLoadingWeather: _loadingWeather,
+              onSave: _onQuickSave,
             ),
+            const SizedBox(height: 20),
+
+            _SectionHeader(text: 'Hemloggar (${homeEntries.length})'),
+            if (homeEntries.isEmpty)
+              const _EmptyHint(text: 'Inga hem-loggar ännu.')
+            else
+              ...homeEntries.map((m) => _EntryCard.fromMoodEntry(m, theme)),
+
+            const SizedBox(height: 24),
+
+            _SectionHeader(text: 'Kartloggar (${mapEntries.length})'),
+            if (mapEntries.isEmpty)
+              const _EmptyHint(text: 'Inga kartloggar ännu.')
+            else
+              ...mapEntries.map((m) => _EntryCard.fromMoodEntry(m, theme)),
+
+            const SizedBox(height: 24),
+
+            _SectionHeader(text: 'Gamla loggar ($legacyCount)'),
+            if (_loadingLegacy)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (legacyCount == 0)
+              const _EmptyHint(text: 'Inga gamla poster hittades.')
+            else
+              ..._legacy.map((l) => _EntryCard.fromLegacy(l, theme)),
+
+            if (legacyCount > 0) ...[
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _migrating ? null : _migrateLegacyToStore,
+                icon: _migrating
+                    ? const SizedBox(
+                        height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.publish),
+                label: Text(_migrating ? 'Migrerar gamla poster…' : 'Migrera gamla poster'),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -233,8 +224,11 @@ class _QuickLogCardState extends State<_QuickLogCard> {
     final note = _ctrl.text.trim();
     if (note.isEmpty || _saving) return;
     setState(() => _saving = true);
+
     await widget.onSave(note);
+
     if (!mounted) return;
+    FocusScope.of(context).unfocus(); // Stänger tangentbordet när man sparar
     setState(() => _saving = false);
     _ctrl.clear();
   }
@@ -309,8 +303,7 @@ class _QuickLogCardState extends State<_QuickLogCard> {
   }
 }
 
-// ===== Hjälpfunktioner (top-level) =====
-
+// ===== Hjälpfunktioner =====
 String _emojiFromScore(int score) {
   const emojis = ["😭","😫","😢","☹️","🙁","😐","🙂","😊","😄","😃","😁"];
   final i = score.clamp(0, 10).toInt();
@@ -326,8 +319,8 @@ Weather _parseLegacyWeather(String? text) {
       tempMatch != null ? double.tryParse(tempMatch.group(1)!)?.toDouble() ?? 0.0 : 0.0;
 
   final t = text.toLowerCase();
-  int code = 0; // klart
-  if (t.contains('moln')) code = 3; // mulet
+  int code = 0;
+  if (t.contains('moln')) code = 3;
   if (t.contains('regn')) code = 61;
   if (t.contains('snö')) code = 71;
   if (t.contains('dim')) code = 45;
@@ -335,8 +328,6 @@ Weather _parseLegacyWeather(String? text) {
 
   return Weather(temperatureC: temp, windSpeed: 0, weatherCode: code);
 }
-
-// ----- UI-hjälpklasser -----
 
 class _SectionHeader extends StatelessWidget {
   final String text;
@@ -389,11 +380,9 @@ class _EntryCard extends StatelessWidget {
   final Widget child;
   const _EntryCard(this.child);
 
-  // 👉 Emoji visas ENDAST när det är en kartlogg
   factory _EntryCard.fromMoodEntry(MoodEntry m, ThemeData theme) {
     final cs = theme.colorScheme;
     final tt = theme.textTheme;
-
     final showEmoji = m.kind == EntryKind.map;
 
     return _EntryCard(
@@ -432,12 +421,8 @@ class _EntryCard extends StatelessWidget {
                         const SizedBox(width: 6),
                         Flexible(
                           child: Text(
-                            '${m.weather.shortDescription} • '
-                            '${m.weather.temperatureC.toStringAsFixed(0)}°C • '
-                            'Vind ${m.weather.windSpeed.toStringAsFixed(0)} m/s',
-                            style: tt.bodyMedium?.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
+                            '${m.weather.shortDescription} • ${m.weather.temperatureC.toStringAsFixed(0)}°C • Vind ${m.weather.windSpeed.toStringAsFixed(0)} m/s',
+                            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
                           ),
                         ),
                       ],
@@ -448,11 +433,8 @@ class _EntryCard extends StatelessWidget {
                         Icon(Icons.place_outlined, size: 16, color: cs.secondary),
                         const SizedBox(width: 6),
                         Text(
-                          'Lat ${m.position.latitude.toStringAsFixed(5)}, '
-                          'Lng ${m.position.longitude.toStringAsFixed(5)}',
-                          style: tt.bodyMedium?.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
+                          'Lat ${m.position.latitude.toStringAsFixed(5)}, Lng ${m.position.longitude.toStringAsFixed(5)}',
+                          style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -469,7 +451,6 @@ class _EntryCard extends StatelessWidget {
   factory _EntryCard.fromLegacy(_LegacyLog l, ThemeData theme) {
     final cs = theme.colorScheme;
     final tt = theme.textTheme;
-
     final created = l.createdAt != null
         ? DateFormat('d MMM yyyy HH:mm', 'sv_SE').format(l.createdAt!)
         : '(okänt datum)';
@@ -524,7 +505,6 @@ class _EntryCard extends StatelessWidget {
 }
 
 // ----- Legacy-modell -----
-
 class _LegacyLog {
   final int mood;
   final String note;

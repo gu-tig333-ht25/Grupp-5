@@ -59,15 +59,38 @@ class _ProfilePageState extends State<ProfilePage> {
       await store.setCurrentUserId(selected);
       final all = await store.getAllProfiles();
 
-      // Uppdatera aktuell användare och ladda rätt loggar
       setState(() {
         profiles = all;
         currentUserId = selected;
       });
 
-      // 👇 Detta gör att loggar byts direkt när man byter profil
       await context.read<MoodStore>().switchUser(selected);
+      widget.onProfileChanged();
+    }
+  }
 
+  /// Logga ut och välj profil på nytt
+  Future<void> _logout() async {
+    await store.setCurrentUserId(null);
+    await context.read<MoodStore>().clear();
+
+    final selected = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => SelectProfilePage(
+          profiles: profiles,
+          currentUserId: null,
+        ),
+      ),
+    );
+
+    if (selected != null) {
+      await store.setCurrentUserId(selected);
+      final all = await store.getAllProfiles();
+      setState(() {
+        profiles = all;
+        currentUserId = selected;
+      });
+      await context.read<MoodStore>().switchUser(selected);
       widget.onProfileChanged();
     }
   }
@@ -112,10 +135,25 @@ class _ProfilePageState extends State<ProfilePage> {
                 children: [
                   Align(
                     alignment: Alignment.centerRight,
-                    child: OutlinedButton.icon(
-                      onPressed: _chooseAccount,
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Byt konto'),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _chooseAccount,
+                          icon: const Icon(Icons.switch_account),
+                          label: const Text('Byt konto'),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton.icon(
+                          onPressed: _logout,
+                          icon: const Icon(Icons.logout),
+                          label: const Text('Logga ut'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.redAccent,
+                            side: const BorderSide(color: Colors.redAccent),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -205,7 +243,6 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 32),
                   const SupportHelpCard(),
                 ],
