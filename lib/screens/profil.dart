@@ -4,6 +4,9 @@ import '../services/local_profiles.dart';
 import '../services/select_profile.dart';
 import '../services/mood_store.dart';
 
+// 👇 Ny import för e-post-inloggning
+import 'login_page.dart';
+
 class ProfilePage extends StatefulWidget {
   final bool isDarkMode;
   final Function(bool) onThemeChanged;
@@ -37,14 +40,14 @@ class _ProfilePageState extends State<ProfilePage> {
     final uid = await store.getCurrentUserId();
     setState(() {
       profiles = all;
-      currentUserId = uid ?? 'alex';
+      currentUserId = uid;
     });
   }
 
   Map<String, dynamic>? get currentProfile =>
       currentUserId == null ? null : profiles[currentUserId];
 
-  /// 🔁 Byt användare
+  /// 🔁 Byt användare – visar lista (som tidigare)
   Future<void> _chooseAccount() async {
     final selected = await Navigator.of(context).push<String>(
       MaterialPageRoute(
@@ -69,17 +72,14 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  /// Logga ut och välj profil på nytt
+  /// 🚪 Logga ut -> gå till e-post-login
   Future<void> _logout() async {
     await store.setCurrentUserId(null);
     await context.read<MoodStore>().clear();
 
     final selected = await Navigator.of(context).push<String>(
       MaterialPageRoute(
-        builder: (_) => SelectProfilePage(
-          profiles: profiles,
-          currentUserId: null,
-        ),
+        builder: (_) => LoginPage(profiles: profiles),
       ),
     );
 
@@ -92,6 +92,11 @@ class _ProfilePageState extends State<ProfilePage> {
       });
       await context.read<MoodStore>().switchUser(selected);
       widget.onProfileChanged();
+    } else {
+      // backade från login – visa "Ingen profil vald"
+      setState(() {
+        currentUserId = null;
+      });
     }
   }
 
@@ -179,8 +184,8 @@ class _ProfilePageState extends State<ProfilePage> {
                     const Text('Ingen profil vald'),
                     const SizedBox(height: 8),
                     FilledButton(
-                      onPressed: _chooseAccount,
-                      child: const Text('Välj profil'),
+                      onPressed: _logout,
+                      child: const Text('Logga in'),
                     ),
                     const SizedBox(height: 24),
                   ],

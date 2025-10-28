@@ -18,42 +18,46 @@ class StatistikPage extends StatefulWidget {
 class _StatistikPageState extends State<StatistikPage> {
   static const LatLng _fallback = LatLng(57.7089, 11.9746); // Göteborg
 
-  late List<DateTime> _weekDays;          // Mån..Sön (denna vecka)
-  Map<String, int> _dailyCodes = {};      // 'YYYY-MM-DD' -> weather_code
+  late DateTime _weekStart;             // Måndagen för aktiv vecka
+  late List<DateTime> _weekDays;        // Mån..Sön (aktiv vecka)
+  late LatLng _weekBaseAt;              // EN basplats för hela veckan
+  Map<String, int> _dailyCodes = {};    // 'YYYY-MM-DD' -> weather_code
   bool _loading = true;
   bool _error = false;
 
   @override
   void initState() {
     super.initState();
-    _weekDays = _currentWeekDays();
+    _weekStart = _mondayOf(DateTime.now());
+    _weekDays = _daysOfWeek(_weekStart);
+    _weekBaseAt = _pickBaseLocationOnce();
     _loadWeekWeather();
   }
 
-  List<DateTime> _currentWeekDays() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final monday = today.subtract(Duration(days: today.weekday - 1)); // 1 = måndag
-    return List.generate(7, (i) => monday.add(Duration(days: i)));
+  DateTime _mondayOf(DateTime dt) {
+    final d = DateTime(dt.year, dt.month, dt.day);
+    return d.subtract(Duration(days: d.weekday - 1)); // 1 = måndag
+  }
+
+  List<DateTime> _daysOfWeek(DateTime monday) =>
+      List.generate(7, (i) => monday.add(Duration(days: i)));
+
+  /// Välj EN basplats för väder för denna vecka (senaste loggens plats eller fallback).
+  LatLng _pickBaseLocationOnce() {
+    final entries = context.read<MoodStore>().entries;
+    if (entries.isNotEmpty) {
+      final last = entries.last;
+      return LatLng(last.position.latitude, last.position.longitude);
+    }
+    return _fallback;
   }
 
   Future<void> _loadWeekWeather() async {
     try {
-      // Försök använda senaste inläggets position (om någon); annars fallback
-      final entries = context.read<MoodStore>().entries;
-      LatLng at = _fallback;
-      if (entries.isNotEmpty) {
-        final last = entries.last;
-        at = LatLng(last.position.latitude, last.position.longitude);
-      }
-
-      final start = _weekDays.first;
-      final end = _weekDays.last;
-
       final codes = await WeatherService.fetchDailyWeatherCodes(
-        at: at,
-        start: start,
-        end: end,
+        at: _weekBaseAt,
+        start: _weekDays.first,
+        end: _weekDays.last,
       );
 
       if (!mounted) return;
@@ -85,18 +89,16 @@ class _StatistikPageState extends State<StatistikPage> {
     final xWeatherEmojis = <String>[]; // ☀️/☁️/🌧️
 
     for (final d in _weekDays) {
+      // Humör (emoji -> 0..10), medel per dag
       final todays = entries.where((e) => _isSameDay(e.date, d)).toList();
-
-      // Humör från loggar (emoji -> 0..10), medel per dag
       final moodVals = todays.map((e) => _scoreFromEmoji(e.emoji)).toList();
-      final avgMood = moodVals.isEmpty
-          ? null
-          : moodVals.reduce((a, b) => a + b) / moodVals.length;
+      final avgMood =
+          moodVals.isEmpty ? null : moodVals.reduce((a, b) => a + b) / moodVals.length;
       moodSeriesNullable.add(avgMood);
 
-      // Väder från Open-Meteo (dagens kod → score + emoji)
+      // Väder (från cachade koder för veckans basplats)
       final key = _dateKey(d);
-      final code = _dailyCodes[key]; // kan vara null om ej hunnit laddas
+      final code = _dailyCodes[key];
       final wScore = code == null ? 5.0 : _weatherCodeToScore(code);
       weatherSeries.add(wScore);
       xWeatherEmojis.add(code == null ? '' : _weatherEmojiFromCode(code));
@@ -116,10 +118,16 @@ class _StatistikPageState extends State<StatistikPage> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
+            // Kolla om ny vecka startat → byt vecka & basplats; annars behåll basplats.
+            final nowMonday = _mondayOf(DateTime.now());
             setState(() {
               _loading = true;
               _error = false;
-              _weekDays = _currentWeekDays();
+              if (!_isSameDay(nowMonday, _weekStart)) {
+                _weekStart = nowMonday;
+                _weekDays = _daysOfWeek(_weekStart);
+                _weekBaseAt = _pickBaseLocationOnce(); // välj om vid ny vecka
+              }
             });
             await _loadWeekWeather();
           },
@@ -166,8 +174,8 @@ class _StatistikPageState extends State<StatistikPage> {
                         child: _DualLineChart(
                           xLabels: xLabels,
                           xWeatherEmojis: xWeatherEmojis, // ☀️/☁️/🌧️ under X
-                          line1: moodSeries,
-                          line2: weatherSeries,
+                          line1: moodSeries,               // humör
+                          line2: weatherSeries,            // väder→humör
                           line1Color: cs.primary,
                           line2Color: Colors.teal,
                           gridColor: theme.dividerColor.withOpacity(.35),
@@ -189,7 +197,7 @@ class _StatistikPageState extends State<StatistikPage> {
 
               const SizedBox(height: 14),
 
-              // Enkel placeholder för "Humör per plats"
+              // Enkel placeholder för "Humör per plats" (samma som tidigare)
               _SectionCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -383,7 +391,7 @@ extension on Widget {
   Widget expanded() => Expanded(child: this);
 }
 
-/* --------- Linjediagram (två linjer + emoji-Y + väder-emoji X), utan Path -------- */
+/* --------- Linjediagram (två linjer + emoji-Y + väder-emoji X) -------- */
 
 class _DualLineChart extends StatelessWidget {
   const _DualLineChart({
@@ -630,7 +638,7 @@ double _weatherCodeToScore(int code) {
 String _weatherEmojiFromCode(int code) {
   if (code == 0) return '☀️'; // klart
   if ([51, 53, 55, 61, 63, 65, 80, 81, 82].contains(code)) return '🌧️'; // regn
-  return '☁️'; // övrigt
+  return '☁️'; // övrigt (moln/dimma/snö etc. förenklat)
 }
 
 /// Fyll null-värden i humörserien så att linjen inte bryts
