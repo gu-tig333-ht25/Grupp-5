@@ -1,11 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../services/location_weather_service.dart';
-import 'notes_page.dart';
+
 import '../services/mood_store.dart';
 import '../models/mood_entry.dart';
 import '../services/weather_service.dart';
@@ -22,16 +19,10 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
   Weather? _weather;
   bool _loadingWeather = true;
 
-  static const _legacyKey = 'mood_logs';
-  final List<_LegacyLog> _legacy = [];
-  bool _loadingLegacy = true;
-  bool _migrating = false;
-
   @override
   void initState() {
     super.initState();
     _loadWeather();
-    _loadLegacy();
   }
 
   Future<void> _loadWeather() async {
@@ -45,68 +36,6 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _loadingWeather = false);
-    }
-  }
-
-  Future<void> _loadLegacy() async {
-    setState(() => _loadingLegacy = true);
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_legacyKey);
-      if (raw != null && raw.isNotEmpty) {
-        final decoded = jsonDecode(raw);
-        if (decoded is List) {
-          final list = decoded.cast<Map<String, dynamic>>();
-          _legacy
-            ..clear()
-            ..addAll(list.map(_LegacyLog.fromJson));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Kunde inte läsa gamla poster: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _loadingLegacy = false);
-    }
-  }
-
-  Future<void> _migrateLegacyToStore() async {
-    if (_legacy.isEmpty || _migrating) return;
-    setState(() => _migrating = true);
-    try {
-      final store = context.read<MoodStore>();
-
-      for (final l in _legacy) {
-        final parsed = _parseLegacyWeather(l.weather);
-        final entry = MoodEntry(
-          kind: EntryKind.map,
-          emoji: _emojiFromScore(l.mood),
-          note: l.note.isEmpty ? '(Ingen anteckning)' : l.note,
-          date: l.createdAt ?? DateTime.now(),
-          position: _fallbackCenter,
-          weather: parsed,
-        );
-        await store.add(entry);
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_legacyKey);
-
-      if (!mounted) return;
-      setState(() => _legacy.clear());
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gamla poster har migrerats')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Migrering misslyckades: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _migrating = false);
     }
   }
 
@@ -134,7 +63,6 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
 
     final homeEntries = allEntries.where((e) => e.kind == EntryKind.home).toList();
     final mapEntries = allEntries.where((e) => e.kind == EntryKind.map).toList();
-    final legacyCount = _legacy.length;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(), // Stänger tangentbordet vid tryck utanför
@@ -162,33 +90,6 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
               const _EmptyHint(text: 'Inga kartloggar ännu.')
             else
               ...mapEntries.map((m) => _EntryCard.fromMoodEntry(m, theme)),
-
-            const SizedBox(height: 24),
-
-            _SectionHeader(text: 'Gamla loggar ($legacyCount)'),
-            if (_loadingLegacy)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            else if (legacyCount == 0)
-              const _EmptyHint(text: 'Inga gamla poster hittades.')
-            else
-              ..._legacy.map((l) => _EntryCard.fromLegacy(l, theme)),
-
-            if (legacyCount > 0) ...[
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _migrating ? null : _migrateLegacyToStore,
-                icon: _migrating
-                    ? const SizedBox(
-                        height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.publish),
-                label: Text(_migrating ? 'Migrerar gamla poster…' : 'Migrera gamla poster'),
-              ),
-            ],
           ],
         ),
       ),
@@ -310,25 +211,6 @@ String _emojiFromScore(int score) {
   return emojis[i];
 }
 
-Weather _parseLegacyWeather(String? text) {
-  if (text == null || text.trim().isEmpty) {
-    return Weather(temperatureC: 0, windSpeed: 0, weatherCode: 3);
-  }
-  final tempMatch = RegExp(r'(-?\d+)(?:[.,]\d+)?\s*°').firstMatch(text);
-  final temp =
-      tempMatch != null ? double.tryParse(tempMatch.group(1)!)?.toDouble() ?? 0.0 : 0.0;
-
-  final t = text.toLowerCase();
-  int code = 0;
-  if (t.contains('moln')) code = 3;
-  if (t.contains('regn')) code = 61;
-  if (t.contains('snö')) code = 71;
-  if (t.contains('dim')) code = 45;
-  if (t.contains('åsk') || t.contains('blixt')) code = 95;
-
-  return Weather(temperatureC: temp, windSpeed: 0, weatherCode: code);
-}
-
 class _SectionHeader extends StatelessWidget {
   final String text;
   const _SectionHeader({required this.text});
@@ -448,95 +330,6 @@ class _EntryCard extends StatelessWidget {
     );
   }
 
-  factory _EntryCard.fromLegacy(_LegacyLog l, ThemeData theme) {
-    final cs = theme.colorScheme;
-    final tt = theme.textTheme;
-    final created = l.createdAt != null
-        ? DateFormat('d MMM yyyy HH:mm', 'sv_SE').format(l.createdAt!)
-        : '(okänt datum)';
-    final sub = [
-      if (l.location.isNotEmpty) '📍 ${l.location}',
-      if (l.weather.isNotEmpty) '☁️ ${l.weather}',
-    ].join('  •  ');
-
-    return _EntryCard(
-      Card(
-        elevation: 1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(_emojiFromScore(l.mood), style: const TextStyle(fontSize: 28)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(created,
-                        style: tt.titleMedium?.copyWith(
-                          color: cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        )),
-                    const SizedBox(height: 6),
-                    Text(l.note.isEmpty ? '(Ingen anteckning)' : l.note,
-                        style: tt.bodyLarge?.copyWith(color: cs.onSurface)),
-                    const SizedBox(height: 8),
-                    if (sub.isNotEmpty)
-                      Text(sub, style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
-                    const SizedBox(height: 6),
-                    Text(
-                      '(Gammal post • visas tills du migrerar)',
-                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) => child;
-}
-
-// ----- Legacy-modell -----
-class _LegacyLog {
-  final int mood;
-  final String note;
-  final String location;
-  final String weather;
-  final DateTime? createdAt;
-
-  _LegacyLog({
-    required this.mood,
-    required this.note,
-    required this.location,
-    required this.weather,
-    this.createdAt,
-  });
-
-  factory _LegacyLog.fromJson(Map<String, dynamic> json) {
-    final dynamic rawMood = json['mood'] ?? 0;
-    int parsedMood;
-    if (rawMood is int) {
-      parsedMood = rawMood;
-    } else if (rawMood is num) {
-      parsedMood = rawMood.round();
-    } else {
-      parsedMood = int.tryParse(rawMood.toString()) ?? 0;
-    }
-
-    return _LegacyLog(
-      mood: parsedMood,
-      note: (json['note'] ?? '') as String,
-      location: (json['location'] ?? '') as String,
-      weather: (json['weather'] ?? '') as String,
-      createdAt: DateTime.tryParse(json['createdAt'] ?? ''),
-    );
-  }
 }
