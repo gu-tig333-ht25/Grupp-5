@@ -28,7 +28,7 @@ class MoodStore extends ChangeNotifier {
       const oldKey = 'mood_entries_v1';
       final migrated = await _readListSafely(prefs, oldKey);
       if (migrated.isNotEmpty) {
-        // spara under nya nyckeln och rensa gamla
+        // Spara under nya nyckeln och rensa gamla
         await prefs.setString(
           perUserKey,
           jsonEncode(migrated.map((e) => e.toJson()).toList()),
@@ -42,12 +42,13 @@ class MoodStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Byt aktiv användare och ladda dennes loggar.
+  /// 🔁 Byt aktiv användare och ladda dennes loggar.
   Future<void> switchUser(String userId) async {
     _currentUserId = userId;
     await load();
   }
 
+  /// ➕ Lägg till ett nytt humörinlägg.
   Future<void> add(MoodEntry entry) async {
     final prefs = await SharedPreferences.getInstance();
     final key = 'mood_entries_$_currentUserId';
@@ -63,6 +64,13 @@ class MoodStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Rensa endast loggar för aktuell användare.
+Future<void> clear() async {
+  _byUser[_currentUserId] = [];
+  notifyListeners();
+}
+
+  /// Rensa alla loggar (inkl. från lagring).
   Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('mood_entries_$_currentUserId');
