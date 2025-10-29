@@ -42,13 +42,13 @@ class MoodStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 🔁 Byt aktiv användare och ladda dennes loggar.
+  /// Byt aktiv användare och ladda dennes loggar.
   Future<void> switchUser(String userId) async {
     _currentUserId = userId;
     await load();
   }
 
-  /// ➕ Lägg till ett nytt humörinlägg.
+  /// Lägg till ett nytt humörinlägg.
   Future<void> add(MoodEntry entry) async {
     final prefs = await SharedPreferences.getInstance();
     final key = 'mood_entries_$_currentUserId';
@@ -64,13 +64,29 @@ class MoodStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Rensa endast loggar för aktuell användare.
-Future<void> clear() async {
-  _byUser[_currentUserId] = [];
-  notifyListeners();
-}
+  /// Ta bort en specifik logg.
+  Future<void> remove(MoodEntry entry) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'mood_entries_$_currentUserId';
 
-  /// Rensa alla loggar (inkl. från lagring).
+    final list = List<MoodEntry>.from(_byUser[_currentUserId] ?? const []);
+    list.remove(entry);
+    _byUser[_currentUserId] = list;
+
+    await prefs.setString(
+      key,
+      jsonEncode(list.map((e) => e.toJson()).toList()),
+    );
+    notifyListeners();
+  }
+
+  /// Rensa loggar för aktuell användare (men behåll sparade i minnet)
+  Future<void> clear() async {
+    _byUser[_currentUserId] = [];
+    notifyListeners();
+  }
+
+  /// Rensa helt från lagring
   Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('mood_entries_$_currentUserId');
@@ -79,7 +95,6 @@ Future<void> clear() async {
   }
 
   // ------- helpers -------
-
   Future<List<MoodEntry>> _readListSafely(SharedPreferences prefs, String key) async {
     try {
       final raw = prefs.getString(key);
@@ -90,12 +105,8 @@ Future<void> clear() async {
       final out = <MoodEntry>[];
       for (final item in decoded) {
         try {
-          // Stötta både Map<dynamic,dynamic> och korrekt typ
           final map = (item as Map).cast<String, dynamic>();
-
-          // Bakåtkomp: om 'kind' saknas → anta kartpost (EntryKind.map)
-          map.putIfAbsent('kind', () => 'map');
-
+          map.putIfAbsent('kind', () => 'map'); // bakåtkomp
           out.add(MoodEntry.fromJson(map));
         } catch (e) {
           debugPrint('Hoppar över trasig post i $key: $e');

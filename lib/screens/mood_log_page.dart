@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-
+import '../services/location_service.dart';
 import '../services/mood_store.dart';
 import '../models/mood_entry.dart';
 import '../services/weather_service.dart';
+import '../services/mood_store.dart';
 
 class MoodLogScreen extends StatefulWidget {
   const MoodLogScreen({super.key});
@@ -40,7 +41,8 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
   }
 
   Future<void> _onQuickSave(String note) async {
-    final weather = _weather ?? Weather(temperatureC: 0, windSpeed: 0, weatherCode: 3);
+    final weather =
+        _weather ?? Weather(temperatureC: 0, windSpeed: 0, weatherCode: 3);
     final entry = MoodEntry(
       kind: EntryKind.home,
       emoji: '🙂',
@@ -52,7 +54,7 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
     await context.read<MoodStore>().add(entry);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Humör sparat')),
+      const SnackBar(content: Text('Humör sparat!')),
     );
   }
 
@@ -61,11 +63,12 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
     final allEntries = context.watch<MoodStore>().entries.reversed.toList();
     final theme = Theme.of(context);
 
-    final homeEntries = allEntries.where((e) => e.kind == EntryKind.home).toList();
+    final homeEntries =
+        allEntries.where((e) => e.kind == EntryKind.home).toList();
     final mapEntries = allEntries.where((e) => e.kind == EntryKind.map).toList();
 
     return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(), // Stänger tangentbordet vid tryck utanför
+      onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         appBar: AppBar(title: const Text('Humörlogg')),
         body: ListView(
@@ -76,15 +79,12 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
               onSave: _onQuickSave,
             ),
             const SizedBox(height: 20),
-
             _SectionHeader(text: 'Hemloggar (${homeEntries.length})'),
             if (homeEntries.isEmpty)
               const _EmptyHint(text: 'Inga hem-loggar ännu.')
             else
               ...homeEntries.map((m) => _EntryCard.fromMoodEntry(m, theme)),
-
             const SizedBox(height: 24),
-
             _SectionHeader(text: 'Kartloggar (${mapEntries.length})'),
             if (mapEntries.isEmpty)
               const _EmptyHint(text: 'Inga kartloggar ännu.')
@@ -97,7 +97,6 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
   }
 }
 
-// ===== Quick-log widget =====
 class _QuickLogCard extends StatefulWidget {
   final bool isLoadingWeather;
   final Future<void> Function(String note) onSave;
@@ -125,11 +124,9 @@ class _QuickLogCardState extends State<_QuickLogCard> {
     final note = _ctrl.text.trim();
     if (note.isEmpty || _saving) return;
     setState(() => _saving = true);
-
     await widget.onSave(note);
-
     if (!mounted) return;
-    FocusScope.of(context).unfocus(); // Stänger tangentbordet när man sparar
+    FocusScope.of(context).unfocus();
     setState(() => _saving = false);
     _ctrl.clear();
   }
@@ -204,13 +201,6 @@ class _QuickLogCardState extends State<_QuickLogCard> {
   }
 }
 
-// ===== Hjälpfunktioner =====
-String _emojiFromScore(int score) {
-  const emojis = ["😭","😫","😢","☹️","🙁","😐","🙂","😊","😄","😃","😁"];
-  final i = score.clamp(0, 10).toInt();
-  return emojis[i];
-}
-
 class _SectionHeader extends StatelessWidget {
   final String text;
   const _SectionHeader({required this.text});
@@ -258,78 +248,154 @@ class _EmptyHint extends StatelessWidget {
   }
 }
 
-class _EntryCard extends StatelessWidget {
-  final Widget child;
-  const _EntryCard(this.child);
+/// ———————————————————————————————
+/// 💡 _EntryCard: visar logg + plats + delete
+/// ———————————————————————————————
+class _EntryCard extends StatefulWidget {
+  final MoodEntry mood;
+  const _EntryCard(this.mood);
 
   factory _EntryCard.fromMoodEntry(MoodEntry m, ThemeData theme) {
-    final cs = theme.colorScheme;
-    final tt = theme.textTheme;
+    return _EntryCard(m);
+  }
+
+  @override
+  State<_EntryCard> createState() => _EntryCardState();
+}
+
+class _EntryCardState extends State<_EntryCard> {
+  String? _locationName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLocationName();
+  }
+
+  Future<void> _loadLocationName() async {
+    try {
+      final name = await LocationService.reverseGeocode(widget.mood.position);
+      if (!mounted) return;
+      setState(() => _locationName = name);
+    } catch (_) {
+      setState(() => _locationName = 'Okänd plats');
+    }
+  }
+
+  void _confirmDelete(BuildContext context, MoodEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Ta bort logg'),
+        content: const Text(
+          'Är du säker på att du vill ta bort detta humörinlägg?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Avbryt'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Ta bort'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final store = context.read<MoodStore>();
+      store.remove(entry);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Inlägg borttaget!')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.mood;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     final showEmoji = m.kind == EntryKind.map;
 
-    return _EntryCard(
-      Card(
-        elevation: 1,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (showEmoji) ...[
-                Text(m.emoji, style: const TextStyle(fontSize: 28)),
-                const SizedBox(width: 12),
-              ],
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      DateFormat('d MMM yyyy HH:mm', 'sv_SE').format(m.date),
-                      style: tt.titleMedium?.copyWith(
-                        color: cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      m.note.isEmpty ? '(Ingen anteckning)' : m.note,
-                      style: tt.bodyLarge?.copyWith(color: cs.onSurface),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.wb_sunny, size: 16, color: cs.primary),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            '${m.weather.shortDescription} • ${m.weather.temperatureC.toStringAsFixed(0)}°C • Vind ${m.weather.windSpeed.toStringAsFixed(0)} m/s',
-                            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(Icons.place_outlined, size: 16, color: cs.secondary),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Lat ${m.position.latitude.toStringAsFixed(5)}, Lng ${m.position.longitude.toStringAsFixed(5)}',
-                          style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (showEmoji) ...[
+              Text(m.emoji, style: const TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
             ],
-          ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  /// Datum + Ta bort-ikon
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        DateFormat('d MMM yyyy HH:mm', 'sv_SE').format(m.date),
+                        style: tt.titleMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        color: cs.error,
+                        tooltip: 'Ta bort logg',
+                        onPressed: () => _confirmDelete(context, m),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    m.note.isEmpty ? '(Ingen anteckning)' : m.note,
+                    style: tt.bodyLarge?.copyWith(color: cs.onSurface),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(Icons.wb_sunny, size: 16, color: cs.primary),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          '${m.weather.shortDescription} • ${m.weather.temperatureC.toStringAsFixed(0)}°C • Vind ${m.weather.windSpeed.toStringAsFixed(0)} m/s',
+                          style: tt.bodyMedium?.copyWith(
+                              color: cs.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.place_outlined,
+                          size: 16, color: cs.secondary),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _locationName ?? 'Hämtar plats...',
+                          style: tt.bodyMedium
+                              ?.copyWith(color: cs.onSurfaceVariant),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
-
-  @override
-  Widget build(BuildContext context) => child;
 }
