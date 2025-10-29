@@ -121,7 +121,7 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
   }
 }
 
-/* ---------------------- 🎨 Färgtema från skärmdump ---------------------- */
+/* ---------------------- Färgtema från skärmdump ---------------------- */
 
 final _lightTheme = ThemeData(
   useMaterial3: true,

@@ -45,7 +45,7 @@ class _MapScreenState extends State<MapScreen> {
       final weather = await WeatherService.fetchCurrent(latLng);
 
       final entry = MoodEntry(
-        kind: EntryKind.map, // 👈 viktigt: kartinlägg
+        kind: EntryKind.map,
         emoji: res.emoji,
         note: res.note.trim().isEmpty ? '(Ingen anteckning)' : res.note.trim(),
         date: DateTime.now(),
@@ -56,7 +56,7 @@ class _MapScreenState extends State<MapScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Humör sparat ✅')),
+        const SnackBar(content: Text('Humör sparat!')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -123,7 +123,6 @@ class _MapScreenState extends State<MapScreen> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
 
-    // Endast kart-poster
     final all = context.watch<MoodStore>().entries;
     final mapEntries = all.where((e) => e.kind == EntryKind.map).toList();
 
@@ -143,8 +142,9 @@ class _MapScreenState extends State<MapScreen> {
         ],
       ),
       body: SafeArea(
+        bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
           child: Column(
             children: [
               const SizedBox(height: 6),
@@ -155,85 +155,93 @@ class _MapScreenState extends State<MapScreen> {
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: cs.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 10,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    children: [
-                      FlutterMap(
-                        mapController: _mapController,
-                        options: MapOptions(
-                          initialCenter: _center,
-                          initialZoom: 13.5,
-                          onTap: _onMapTap,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.06),
+                          blurRadius: 10,
+                          offset: const Offset(0, 6),
                         ),
-                        children: [
-                          TileLayer(
-                            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                            userAgentPackageName: 'com.example.moodmap',
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Stack(
+                      children: [
+                        FlutterMap(
+                          mapController: _mapController,
+                          options: MapOptions(
+                            initialCenter: _center,
+                            initialZoom: 13.5,
+                            onTap: _onMapTap,
                           ),
-                          MarkerLayer(
-                            markers: mapEntries.map((m) {
-                              return Marker(
-                                width: 48,
-                                height: 48,
-                                point: m.position,
-                                child: GestureDetector(
-                                  onTap: () => _showDetails(m),
-                                  child: Center(
-                                    child: Text(m.emoji, style: const TextStyle(fontSize: 28)),
+                          children: [
+                            TileLayer(
+                              urlTemplate:
+                                  'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                              userAgentPackageName: 'com.example.moodmap',
+                            ),
+                            MarkerLayer(
+                              markers: mapEntries.map((m) {
+                                return Marker(
+                                  width: 48,
+                                  height: 48,
+                                  point: m.position,
+                                  child: GestureDetector(
+                                    onTap: () => _showDetails(m),
+                                    child: Center(
+                                      child: Text(m.emoji,
+                                          style:
+                                              const TextStyle(fontSize: 28)),
+                                    ),
                                   ),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ],
-                      ),
-                      Positioned(
-                        right: 8,
-                        bottom: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: cs.surface.withOpacity(0.8),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: cs.outlineVariant),
-                          ),
-                          child: Text(
-                            '© OpenStreetMap contributors',
-                            style: tt.labelSmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                              fontSize: 11,
+                                );
+                              }).toList(),
                             ),
-                          ),
+                          ],
                         ),
-                      ),
-                      if (_saving)
-                        Positioned.fill(
+                        Positioned(
+                          right: 8,
+                          bottom: 8,
                           child: Container(
-                            color: Colors.black45,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const CircularProgressIndicator(),
-                                const SizedBox(height: 12),
-                                Text('Sparar…',
-                                    style: tt.bodyMedium?.copyWith(color: Colors.white)),
-                              ],
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: cs.surface.withOpacity(0.8),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: cs.outlineVariant),
+                            ),
+                            child: Text(
+                              '© OpenStreetMap contributors',
+                              style: tt.labelSmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                fontSize: 11,
+                              ),
                             ),
                           ),
                         ),
-                    ],
+                        if (_saving)
+                          Positioned.fill(
+                            child: Container(
+                              color: Colors.black45,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const CircularProgressIndicator(),
+                                  const SizedBox(height: 12),
+                                  Text('Sparar…',
+                                      style: tt.bodyMedium
+                                          ?.copyWith(color: Colors.white)),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -244,8 +252,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 }
-
-// ========== Sheet för nytt humör ==========
 
 class _NewMoodSheet extends StatefulWidget {
   const _NewMoodSheet();
@@ -299,7 +305,8 @@ class _NewMoodSheetState extends State<_NewMoodSheet> {
               return InkWell(
                 onTap: () => setState(() => _emoji = e),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
                     color: selected ? cs.surfaceVariant : Colors.transparent,
@@ -354,8 +361,6 @@ class _NewMoodSheetState extends State<_NewMoodSheet> {
     );
   }
 }
-
-// ========== Hjälpklass ==========
 
 class _NewMoodResult {
   final String emoji;

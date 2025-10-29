@@ -233,6 +233,11 @@ class WeatherCard extends StatelessWidget {
             weather != null ? "${weather!.temperatureC.toStringAsFixed(1)}°C" : "Laddar...",
             style: tt.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: cs.onPrimaryContainer),
           ),
+          const SizedBox(height: 4),
+          Text(
+            "Göteborg", // <-- LÄGG TILL DENNA RAD
+            style: tt.bodySmall?.copyWith(color: cs.onPrimaryContainer.withOpacity(.9)),
+          ),
           Text(
             weather?.shortDescription ?? "",
             style: tt.bodyMedium?.copyWith(color: cs.onPrimaryContainer.withOpacity(.9)),
