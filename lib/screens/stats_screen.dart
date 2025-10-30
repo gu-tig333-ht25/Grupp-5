@@ -1,5 +1,3 @@
-// lib/screens/statistik.dart
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:latlong2/latlong.dart';
@@ -17,7 +15,7 @@ class StatistikPage extends StatefulWidget {
 class _StatistikPageState extends State<StatistikPage> {
   late DateTime _weekStart;
   late List<DateTime> _weekDays;
-  Map<DateTime, int>? _weatherCodes; // väderdata per dag
+  Map<DateTime, int>? _weatherCodes;
 
   @override
   void initState() {
@@ -34,9 +32,7 @@ class _StatistikPageState extends State<StatistikPage> {
 
   Future<void> _loadWeather() async {
     try {
-      // Göteborgs koordinater
       const gothenburg = LatLng(57.7089, 11.9746);
-
       final codes = await WeatherService.fetchDailyWeatherCodes(
         at: gothenburg,
         start: _weekStart,
@@ -68,24 +64,19 @@ class _StatistikPageState extends State<StatistikPage> {
     final store = context.watch<MoodStore>();
     final entries = store.entries;
 
-    // --- humör per veckodag ---
     final moodSeriesNullable = <double?>[];
     final xLabels = _weekdayLabelsSv(_weekDays);
 
     for (final d in _weekDays) {
-      final todays = entries
-          .where((e) => _sameLocalDay(_entryLocalDate(e), d))
-          .toList();
+      final todays = entries.where((e) => _sameLocalDay(_entryLocalDate(e), d)).toList();
       final moodVals = todays.map((e) => _scoreFromEmoji(e.emoji)).toList();
-      final avgMood = moodVals.isEmpty
-          ? null
-          : moodVals.reduce((a, b) => a + b) / moodVals.length;
+      final avgMood =
+          moodVals.isEmpty ? null : moodVals.reduce((a, b) => a + b) / moodVals.length;
       moodSeriesNullable.add(avgMood);
     }
 
     final moodSeries = _fillGaps(moodSeriesNullable, 5.0);
 
-    // --- sammanfattning ---
     final allMoodValues = entries.map((e) => _scoreFromEmoji(e.emoji)).toList();
     final avgAll = allMoodValues.isEmpty
         ? 0.0
@@ -134,32 +125,14 @@ class _StatistikPageState extends State<StatistikPage> {
                         gridColor: theme.dividerColor.withOpacity(.35),
                         yTickEmojis: const ['😔', '😐', '😄'],
                         yTickValues: const [3.0, 5.0, 8.0],
+                        weatherEmojis: _weatherCodes != null
+                            ? _weekDays.map((d) {
+                                final code = _weatherCodes![d];
+                                return code != null ? _emojiForWeatherCode(code) : '–';
+                              }).toList()
+                            : null,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    if (_weatherCodes != null)
-  Padding(
-    padding: const EdgeInsets.only(top: 8),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: List.generate(_weekDays.length, (i) {
-        final day = _weekDays[i];
-        final code = _weatherCodes![day];
-        final emoji =
-            code != null ? _emojiForWeatherCode(code) : '–';
-        return Text(
-          emoji,
-          style: const TextStyle(fontSize: 16),
-        );
-      }),
-    ),
-  )
-else
-  const Padding(
-    padding: EdgeInsets.only(top: 8),
-    child: Text('Hämtar väder...', style: TextStyle(fontSize: 12)),
-  ),
-
                     const SizedBox(height: 8),
                     Opacity(
                       opacity: .7,
@@ -176,8 +149,7 @@ else
                 children: [
                   _SummaryCard(
                     title: 'Snitt',
-                    value:
-                        allMoodValues.isEmpty ? '–' : avgAll.toStringAsFixed(1),
+                    value: allMoodValues.isEmpty ? '–' : avgAll.toStringAsFixed(1),
                     icon: Icons.emoji_emotions,
                   ).expanded(),
                   const SizedBox(width: 10),
@@ -200,8 +172,6 @@ else
       ),
     );
   }
-
-  // === Hjälpmetoder ===
 
   String _emojiForWeatherCode(int code) {
     if (code == 0) return '☀️';
@@ -228,17 +198,7 @@ else
 
   double _scoreFromEmoji(String e) {
     const ordered = [
-      "😭",
-      "😫",
-      "😢",
-      "☹️",
-      "🙁",
-      "😐",
-      "🙂",
-      "😊",
-      "😄",
-      "😃",
-      "😁",
+      "😭", "😫", "😢", "☹️", "🙁", "😐", "🙂", "😊", "😄", "😃", "😁",
     ];
     final i = ordered.indexOf(e);
     return i < 0 ? 5.0 : i.toDouble();
@@ -247,8 +207,7 @@ else
   List<double> _fillGaps(List<double?> src, double fallback) {
     if (src.isEmpty) return [];
     final out = List<double?>.from(src);
-    double last =
-        src.firstWhere((e) => e != null, orElse: () => fallback) ?? fallback;
+    double last = src.firstWhere((e) => e != null, orElse: () => fallback) ?? fallback;
     for (int i = 0; i < out.length; i++) {
       out[i] ??= last;
       last = out[i]!;
@@ -433,6 +392,7 @@ class _SingleLineChart extends StatelessWidget {
     required this.gridColor,
     required this.yTickEmojis,
     required this.yTickValues,
+    this.weatherEmojis,
   });
 
   final List<String> xLabels;
@@ -441,6 +401,7 @@ class _SingleLineChart extends StatelessWidget {
   final Color gridColor;
   final List<String> yTickEmojis;
   final List<double> yTickValues;
+  final List<String>? weatherEmojis;
 
   @override
   Widget build(BuildContext context) {
@@ -456,6 +417,7 @@ class _SingleLineChart extends StatelessWidget {
             .textTheme
             .labelSmall
             ?.copyWith(fontWeight: FontWeight.w600),
+        weatherEmojis: weatherEmojis,
       ),
       child: const SizedBox.expand(),
     );
@@ -471,8 +433,10 @@ class _SingleLineChartPainter extends CustomPainter {
     required this.yTickEmojis,
     required this.yTickValues,
     required this.labelStyle,
+    this.weatherEmojis,
   });
 
+  final List<String>? weatherEmojis;
   final List<String> xLabels;
   final List<double> values;
   final Color color;
@@ -506,20 +470,27 @@ class _SingleLineChartPainter extends CustomPainter {
       canvas.drawLine(Offset(rect.left, dy), Offset(rect.right, dy), gridPaint);
     }
 
-    // Emoji på Y-axeln
     for (int i = 0; i < yTickEmojis.length && i < yTickValues.length; i++) {
       final emoji = yTickEmojis[i];
       final dy = _mapY(yTickValues[i], rect);
       _drawText(canvas, emoji, Offset(rect.left - 26, dy - 8), labelStyle);
     }
 
-    // X-etiketter
+    // Center labels and weather icons
     final stepX = rect.width / (xLabels.length - 1);
     for (int i = 0; i < xLabels.length; i++) {
       final dx = rect.left + stepX * i;
-      _drawText(canvas, xLabels[i], Offset(dx - 10, rect.bottom + 6), labelStyle);
+
+      // Weekday
+      _drawCenteredText(canvas, xLabels[i], Offset(dx, rect.bottom + 6), labelStyle);
+
+      // Weather emoji below the weekday
+      if (weatherEmojis != null && i < weatherEmojis!.length) {
+        _drawCenteredText(canvas, weatherEmojis![i], Offset(dx, rect.bottom + 22), labelStyle);
+      }
     }
 
+    // Draw line
     final pts = List<Offset>.generate(values.length, (i) {
       final x = rect.left + stepX * i;
       final y = _mapY(values[i], rect);
@@ -542,6 +513,7 @@ class _SingleLineChartPainter extends CustomPainter {
     }
   }
 
+  // Helper methods for text and positioning
   double _mapY(double v, Rect rect) {
     final clamped = v.clamp(_minY, _maxY);
     return rect.bottom - (clamped - _minY) / (_maxY - _minY) * rect.height;
@@ -555,6 +527,18 @@ class _SingleLineChartPainter extends CustomPainter {
     tp.paint(canvas, pos);
   }
 
+  void _drawCenteredText(Canvas canvas, String text, Offset center, TextStyle? style) {
+    final tp = TextPainter(
+      text: TextSpan(text: text, style: style),
+            textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    // Center the text horizontally around the X position (dx)
+    final offset = Offset(center.dx - tp.width / 2, center.dy);
+    tp.paint(canvas, offset);
+  }
+
   @override
-  bool shouldRepaint(covariant _SingleLineChartPainter old) => true;
+  bool shouldRepaint(covariant _SingleLineChartPainter oldDelegate) => true;
 }

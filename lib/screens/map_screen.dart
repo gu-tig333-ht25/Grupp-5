@@ -132,10 +132,10 @@ class _MapScreenState extends State<MapScreen> {
     final mapEntries = all.where((e) => e.kind == EntryKind.map).toList();
 
     return Scaffold(
-      backgroundColor: cs.background,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: const Text('Humörkarta'),
-        backgroundColor: cs.background,
+        backgroundColor: cs.surface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         actions: [
@@ -319,7 +319,7 @@ class _NewMoodSheetState extends State<_NewMoodSheet> {
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                    color: selected ? cs.surfaceVariant : Colors.transparent,
+                    color: selected ? cs.surfaceContainerHighest : Colors.transparent,
                     border: Border.all(
                       color: selected ? cs.primary : cs.outlineVariant,
                     ),

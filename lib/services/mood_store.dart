@@ -5,7 +5,6 @@ import 'package:latlong2/latlong.dart';
 import '../models/mood_entry.dart';
 import '../services/local_profiles.dart';
 import '../services/weather_service.dart'; // ✅ vi använder denna nu
-import '../models/weather.dart';
 import 'package:geolocator/geolocator.dart';
 
 class MoodStore extends ChangeNotifier {
@@ -128,12 +127,12 @@ class MoodStore extends ChangeNotifier {
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      // 🔹 Hämta aktuellt väder från OpenWeather (via WeatherService)
+      // Hämta aktuellt väder från OpenWeather (via WeatherService)
       final weather = await WeatherService.fetchCurrent(
         LatLng(pos.latitude, pos.longitude),
       );
 
-      // 🔹 Skapa och spara nytt humörinlägg
+      // Create and save new mood log
       final entry = MoodEntry(
         emoji: emoji,
         note: note.trim().isEmpty ? '(Ingen anteckning)' : note.trim(),

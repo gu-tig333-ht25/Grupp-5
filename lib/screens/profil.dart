@@ -429,7 +429,7 @@ class _LoginPageState extends State<LoginPage> {
                const Text('Inga profiler tillgängliga.')
              else
                DropdownButtonFormField<String>(
-                 value: _selectedUserId,
+                 initialValue: _selectedUserId,
                  isExpanded: true,
                  selectedItemBuilder: (context) => entries.map((e) {
                    final name = e.value['name'] ?? e.key;
