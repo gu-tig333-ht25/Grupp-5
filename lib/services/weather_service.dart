@@ -53,7 +53,7 @@ class WeatherService {
     required DateTime end,
   }) async {
     // Open-Meteo används här eftersom OpenWeather inte har gratis daily weather_code
-    String _fmt(DateTime d) =>
+    String fmt(DateTime d) =>
         '${d.year.toString().padLeft(4, '0')}-'
         '${d.month.toString().padLeft(2, '0')}-'
         '${d.day.toString().padLeft(2, '0')}';
@@ -63,8 +63,8 @@ class WeatherService {
       '?latitude=${at.latitude}&longitude=${at.longitude}'
       '&daily=weather_code'
       '&timezone=auto'
-      '&start_date=${_fmt(start)}'
-      '&end_date=${_fmt(end)}',
+      '&start_date=${fmt(start)}'
+      '&end_date=${fmt(end)}',
     );
 
     final res = await http.get(url);

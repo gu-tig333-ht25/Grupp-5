@@ -163,7 +163,7 @@ class _QuickLogCardState extends State<_QuickLogCard> {
             decoration: InputDecoration(
               hintText: 'Skriv en anteckning om ditt humör…',
               filled: true,
-              fillColor: cs.surfaceVariant,
+              fillColor: cs.surfaceContainerHighest,
               contentPadding: const EdgeInsets.all(12),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -237,7 +237,7 @@ class _EmptyHint extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.surfaceVariant,
+        color: cs.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: cs.outlineVariant),
       ),

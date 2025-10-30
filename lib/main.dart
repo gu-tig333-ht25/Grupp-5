@@ -138,9 +138,6 @@ final _lightTheme = ThemeData(
     secondaryContainer: Color(0xFFF3EDE8),
     onSecondaryContainer: Color(0xFF1E1E1E),
 
-    background: Color(0xFFFFF9F3),
-    onBackground: Color(0xFF1E1E1E),
-
     surface: Color(0xFFFFF3E9),
     onSurface: Color(0xFF1E1E1E),
 
@@ -163,9 +160,6 @@ final _darkTheme = ThemeData(
     onSecondary: Colors.white,
     secondaryContainer: Color(0xFF1D1D1D),
     onSecondaryContainer: Color(0xFFEAEAEA),
-
-    background: Color(0xFF141414),
-    onBackground: Colors.white,
 
     surface: Color(0xFF1D1D1D),
     onSurface: Colors.white,

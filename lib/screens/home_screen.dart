@@ -56,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final last = store.entries.isEmpty ? null : store.entries.last;
 
     return Scaffold(
-      backgroundColor: cs.background,
+      backgroundColor: cs.surface,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(20),
@@ -172,7 +172,7 @@ class _GreetingCardState extends State<GreetingCard> {
             decoration: InputDecoration(
               hintText: "Hur mår du idag?",
               filled: true,
-              fillColor: cs.surfaceVariant,
+              fillColor: cs.surfaceContainerHighest,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(10),
