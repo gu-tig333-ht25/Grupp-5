@@ -13,8 +13,10 @@ class _MoodLogPageState extends State<MoodLogPage> {
   int moodScore = 6;
   double sliderValue = 6;
   final noteCtrl = TextEditingController();
+
   String locationText = "Stockholm, Sverige";
   String weatherText = "Delvis molnigt, 12°";
+
   static const _storeKey = 'mood_logs';
 
   @override
@@ -31,14 +33,28 @@ class _MoodLogPageState extends State<MoodLogPage> {
   }
 
   String get moodEmoji {
-    const emojis = ["😭","😫","😢","☹️","🙁","😐","🙂","😊","😄","😃","😁"];
-    return emojis[moodScore.clamp(0, 10).toInt()];
+    const emojis = [
+      "😭", // 0
+      "😫", // 1
+      "😢", // 2
+      "☹️", // 3
+      "🙁", // 4
+      "😐", // 5
+      "🙂", // 6
+      "😊", // 7
+      "😄", // 8
+      "😃", // 9
+      "😁", // 10
+    ];
+    final i = moodScore.clamp(0, 10).toInt();
+    return emojis[i];
   }
 
   Future<void> _appendLog(Map<String, dynamic> payload) async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_storeKey);
-    final List<dynamic> list = raw != null ? jsonDecode(raw) as List : [];
+    final List<dynamic> list =
+        raw != null ? jsonDecode(raw) as List : <dynamic>[];
     list.add(payload);
     await prefs.setString(_storeKey, jsonEncode(list));
   }
@@ -51,106 +67,149 @@ class _MoodLogPageState extends State<MoodLogPage> {
       "weather": weatherText,
       "createdAt": DateTime.now().toIso8601String(),
     };
+
     await _appendLog(payload);
+
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Humör & anteckning sparad ✅")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Humör & anteckning sparad ✅")),
+      );
     }
+    // Valfritt: töm textfältet efter spar
+    // noteCtrl.clear();
   }
 
   void onShowSaved() {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NotesPage()));
-  }
-
-  // 🔹 Navigering i menyn
-  void _onNav(int i) {
-    if (i == 1) return; // Du är redan på "Logga"
-    switch (i) {
-      case 0: Navigator.pushReplacementNamed(context, '/home'); break;
-      case 2: Navigator.pushReplacementNamed(context, '/map'); break;
-      case 3: Navigator.pushReplacementNamed(context, '/stats'); break;
-      case 4: Navigator.pushReplacementNamed(context, '/profile'); break;
-    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const NotesPage()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      // ✅ Här är menyn längst ner
-      bottomNavigationBar: AppBottomNav(currentIndex: 1, onTap: _onNav),
+      // Ingen bottomNavigationBar här — borttagen.
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: ListView(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              Text("Hur mår du idag",
-                  style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 16),
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              "Hur mår du idag",
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
 
-              // Emoji-kort
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: theme.colorScheme.outlineVariant),
+            // Kort: emoji + etikett + poäng
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: theme.colorScheme.outlineVariant,
                         ),
-                        child: Text(moodEmoji, style: const TextStyle(fontSize: 28)),
                       ),
-                      const SizedBox(width: 16),
-                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(moodLabel, style: theme.textTheme.titleMedium),
-                        Text("$moodScore/10",
+                      child: Text(
+                        moodEmoji,
+                        style: const TextStyle(fontSize: 28),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(moodLabel, style: theme.textTheme.titleMedium),
+                          const SizedBox(height: 4),
+                          Text(
+                            "$moodScore/10",
                             style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant)),
-                      ]),
-                    ],
-                  ),
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
+            ),
 
-              const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-              // Slider
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Kort: slider
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text("Humörnivå", style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 10),
                     Slider(
                       min: 0,
                       max: 10,
                       divisions: 10,
                       value: sliderValue,
-                      onChanged: (v) => setState(() {
-                        sliderValue = v;
-                        moodScore = v.round();
-                      }),
+                      label: moodScore.toString(),
+                      onChanged: (v) {
+                        setState(() {
+                          sliderValue = v;
+                          moodScore = v.round();
+                        });
+                      },
                     ),
                     Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: const [Text("hemskt"), Text("underbart")]),
-                  ]),
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          "hemskt",
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
+                          "underbart",
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ),
               ),
+            ),
 
-              const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-              // Anteckning
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text("Vad tänker du på?", style: theme.textTheme.titleMedium),
+            // Kort: anteckning
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("Vad tänker du på?",
+                        style: theme.textTheme.titleMedium),
                     const SizedBox(height: 8),
                     TextField(
                       controller: noteCtrl,
@@ -158,67 +217,97 @@ class _MoodLogPageState extends State<MoodLogPage> {
                       decoration: InputDecoration(
                         hintText: "Skriv en anteckning om ditt humör…",
                         border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.all(12),
                       ),
                     ),
-                  ]),
+                  ],
                 ),
               ),
+            ),
 
-              const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-              // Plats och väder
-              Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Row(children: [
-                      const Icon(Icons.place_outlined),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(locationText)),
-                    ]),
+            // Kort: plats + väder (exempel)
+            Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.place_outlined,
+                            color: theme.colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(locationText)),
+                      ],
+                    ),
                     const SizedBox(height: 12),
-                    Row(children: [
-                      const Icon(Icons.cloud_queue),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(weatherText)),
-                    ]),
-                  ]),
+                    Row(
+                      children: [
+                        Icon(Icons.cloud_queue,
+                            color: theme.colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(weatherText)),
+                      ],
+                    ),
+                  ],
                 ),
               ),
+            ),
 
-              const SizedBox(height: 24),
-              ElevatedButton(
+            const SizedBox(height: 20),
+
+            // Spara-knapp
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
                 onPressed: onSave,
                 style: ElevatedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24))),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
                 child: const Text("Spara humör"),
               ),
-              const SizedBox(height: 12),
-              OutlinedButton.icon(
+            ),
+
+            const SizedBox(height: 12),
+
+            // Visa sparade loggar
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
                 onPressed: onShowSaved,
                 icon: const Icon(Icons.list_alt_outlined),
-                label: const Text("Visa sparade loggar"),
                 style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24))),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                ),
+                label: const Text("Visa sparade loggar"),
               ),
-              const SizedBox(height: 40),
-            ],
-          ),
+            ),
+
+            const SizedBox(height: 12),
+          ],
         ),
       ),
     );
   }
 }
 
-// 🔸 Visa sparade loggar
 class NotesPage extends StatefulWidget {
   const NotesPage({super.key});
+
   @override
   State<NotesPage> createState() => _NotesPageState();
 }
@@ -236,50 +325,84 @@ class _NotesPageState extends State<NotesPage> {
   Future<void> _loadLogs() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_storeKey);
-    final List<dynamic> list = raw != null ? jsonDecode(raw) as List : [];
-    setState(() => logs = list.cast<Map<String, dynamic>>());
+    final List<dynamic> list =
+        raw != null ? jsonDecode(raw) as List : <dynamic>[];
+    setState(() {
+      logs = list.cast<Map<String, dynamic>>();
+    });
   }
 
   Future<void> _clearAll() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_storeKey);
-    setState(() => logs = []);
-  }
-
-  void _onNav(int i) {
-    if (i == 1) Navigator.pushReplacementNamed(context, '/log');
-    else if (i == 0) Navigator.pushReplacementNamed(context, '/home');
-    else if (i == 2) Navigator.pushReplacementNamed(context, '/map');
-    else if (i == 3) Navigator.pushReplacementNamed(context, '/stats');
-    else if (i == 4) Navigator.pushReplacementNamed(context, '/profile');
+    if (mounted) {
+      setState(() => logs = []);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
+      // Behåll gärna en AppBar här för navigation.
       appBar: AppBar(
         title: const Text("Sparade loggar"),
         actions: [
           if (logs.isNotEmpty)
-            IconButton(onPressed: _clearAll, icon: const Icon(Icons.delete_outline))
+            IconButton(
+              tooltip: "Rensa allt",
+              onPressed: _clearAll,
+              icon: const Icon(Icons.delete_outline),
+            ),
         ],
       ),
-      bottomNavigationBar: AppBottomNav(currentIndex: 1, onTap: _onNav),
       body: logs.isEmpty
           ? const Center(child: Text("Inga sparade loggar ännu."))
-          : ListView.builder(
+          : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: logs.length,
-              itemBuilder: (_, i) {
-                final item = logs[i];
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final item = logs[index];
+                final mood = (item["mood"] ?? 0).toString();
+                final note = (item["note"] ?? "") as String;
+                final loc = (item["location"] ?? "") as String;
+                final weather = (item["weather"] ?? "") as String;
+                final createdAt = DateTime.tryParse(item["createdAt"] ?? "");
+
+                final subtitle = [
+                  if (loc.isNotEmpty) "📍 $loc",
+                  if (weather.isNotEmpty) "☁️ $weather",
+                ].join("  •  ");
+
                 return Card(
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(16),
-                    title: Text(item["note"] ?? "(Ingen anteckning)"),
-                    subtitle: Text(
-                      "Humör: ${item["mood"]}/10\n📍 ${item["location"]}\n☁️ ${item["weather"]}",
+                    title: Text(
+                      note.isEmpty ? "(Ingen anteckning)" : note,
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8),
+                        Text("Humör: $mood/10"),
+                        if (subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(subtitle),
+                        ],
+                        if (createdAt != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            "Skapad: ${_fmt(createdAt)}",
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 );
@@ -287,30 +410,13 @@ class _NotesPageState extends State<NotesPage> {
             ),
     );
   }
-}
 
-// 🔹 Själva menyn (Hem, Logga, Karta, Statistik, Profil)
-class AppBottomNav extends StatelessWidget {
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-  const AppBottomNav({super.key, required this.currentIndex, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return BottomNavigationBar(
-      type: BottomNavigationBarType.fixed,
-      currentIndex: currentIndex,
-      onTap: onTap,
-      selectedItemColor: theme.colorScheme.primary,
-      unselectedItemColor: theme.colorScheme.onSurfaceVariant,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Hem'),
-        BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline), label: 'Logga'),
-        BottomNavigationBarItem(icon: Icon(Icons.map_outlined), label: 'Karta'),
-        BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), label: 'Statistik'),
-        BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profil'),
-      ],
-    );
+  String _fmt(DateTime dt) {
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return "$y-$m-$d $hh:$mm";
   }
 }
