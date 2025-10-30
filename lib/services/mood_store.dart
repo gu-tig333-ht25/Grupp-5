@@ -1,8 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/mood_entry.dart';
 import '../services/local_profiles.dart';
+import '../services/weather_service.dart'; // ✅ vi använder denna nu
+import '../models/weather.dart';
+import 'package:geolocator/geolocator.dart';
 
 class MoodStore extends ChangeNotifier {
   final LocalProfiles _profiles = LocalProfiles();
@@ -10,25 +14,23 @@ class MoodStore extends ChangeNotifier {
 
   String _currentUserId = 'alex';
 
-  List<MoodEntry> get entries => List.unmodifiable(_byUser[_currentUserId] ?? const []);
+  List<MoodEntry> get entries =>
+      List.unmodifiable(_byUser[_currentUserId] ?? const []);
 
-  /// Ladda loggar för aktiv användare. Robust mot gamla/trasiga data.
+  /// Ladda loggar för aktiv användare.
   Future<void> load() async {
     final uid = await _profiles.getCurrentUserId() ?? 'alex';
     _currentUserId = uid;
 
     final prefs = await SharedPreferences.getInstance();
     final perUserKey = 'mood_entries_$uid';
-
-    // 1) Läs per-användare-nyckeln
     List<MoodEntry> parsed = await _readListSafely(prefs, perUserKey);
 
-    // 2) Om tomt, försök migrera från gammal global nyckel (om den finns)
+    // Försök migrera gamla data
     if (parsed.isEmpty) {
       const oldKey = 'mood_entries_v1';
       final migrated = await _readListSafely(prefs, oldKey);
       if (migrated.isNotEmpty) {
-        // Spara under nya nyckeln och rensa gamla
         await prefs.setString(
           perUserKey,
           jsonEncode(migrated.map((e) => e.toJson()).toList()),
@@ -42,13 +44,11 @@ class MoodStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Byt aktiv användare och ladda dennes loggar.
   Future<void> switchUser(String userId) async {
     _currentUserId = userId;
     await load();
   }
 
-  /// Lägg till ett nytt humörinlägg.
   Future<void> add(MoodEntry entry) async {
     final prefs = await SharedPreferences.getInstance();
     final key = 'mood_entries_$_currentUserId';
@@ -64,7 +64,6 @@ class MoodStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Ta bort en specifik logg.
   Future<void> remove(MoodEntry entry) async {
     final prefs = await SharedPreferences.getInstance();
     final key = 'mood_entries_$_currentUserId';
@@ -80,13 +79,11 @@ class MoodStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Rensa loggar för aktuell användare (men behåll sparade i minnet)
   Future<void> clear() async {
     _byUser[_currentUserId] = [];
     notifyListeners();
   }
 
-  /// Rensa helt från lagring
   Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('mood_entries_$_currentUserId');
@@ -95,7 +92,8 @@ class MoodStore extends ChangeNotifier {
   }
 
   // ------- helpers -------
-  Future<List<MoodEntry>> _readListSafely(SharedPreferences prefs, String key) async {
+  Future<List<MoodEntry>> _readListSafely(
+      SharedPreferences prefs, String key) async {
     try {
       final raw = prefs.getString(key);
       if (raw == null || raw.isEmpty) return [];
@@ -116,6 +114,39 @@ class MoodStore extends ChangeNotifier {
     } catch (e) {
       debugPrint('Kunde inte läsa $key: $e');
       return [];
+    }
+  }
+
+  /// Logga nytt humörinlägg med plats och väder.
+  Future<void> logMoodWithLocationAndWeather({
+    required String emoji,
+    required String note,
+  }) async {
+    try {
+      // 🔹 Hämta nuvarande plats
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // 🔹 Hämta aktuellt väder från OpenWeather (via WeatherService)
+      final weather = await WeatherService.fetchCurrent(
+        LatLng(pos.latitude, pos.longitude),
+      );
+
+      // 🔹 Skapa och spara nytt humörinlägg
+      final entry = MoodEntry(
+        emoji: emoji,
+        note: note.trim().isEmpty ? '(Ingen anteckning)' : note.trim(),
+        date: DateTime.now().toUtc(),
+        position: LatLng(pos.latitude, pos.longitude),
+        weather: weather,
+        kind: EntryKind.map,
+      );
+
+      await add(entry);
+    } catch (e) {
+      debugPrint('Kunde inte logga humör: $e');
+      rethrow;
     }
   }
 }

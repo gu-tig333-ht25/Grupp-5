@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-
 import '../services/weather_service.dart';
 import '../services/local_profiles.dart';
 import '../services/mood_store.dart';
@@ -9,6 +8,7 @@ import '../models/mood_entry.dart';
 import 'map_screen.dart';
 import 'mood_log_page.dart';
 import 'quiz_screen.dart';
+import '../models/weather.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});

@@ -1,3 +1,5 @@
+// lib/screens/mood_log_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
@@ -6,7 +8,7 @@ import '../services/location_service.dart';
 import '../services/mood_store.dart';
 import '../models/mood_entry.dart';
 import '../services/weather_service.dart';
-import '../services/mood_store.dart';
+import '../models/weather.dart';
 
 class MoodLogScreen extends StatefulWidget {
   const MoodLogScreen({super.key});
@@ -41,8 +43,7 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
   }
 
   Future<void> _onQuickSave(String note) async {
-    final weather =
-        _weather ?? Weather(temperatureC: 0, windSpeed: 0, weatherCode: 3);
+    final weather = _weather ?? Weather.unknown();
     final entry = MoodEntry(
       kind: EntryKind.home,
       emoji: '🙂',
@@ -65,7 +66,8 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
 
     final homeEntries =
         allEntries.where((e) => e.kind == EntryKind.home).toList();
-    final mapEntries = allEntries.where((e) => e.kind == EntryKind.map).toList();
+    final mapEntries =
+        allEntries.where((e) => e.kind == EntryKind.map).toList();
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -248,9 +250,6 @@ class _EmptyHint extends StatelessWidget {
   }
 }
 
-/// ———————————————————————————————
-/// 💡 _EntryCard: visar logg + plats + delete
-/// ———————————————————————————————
 class _EntryCard extends StatefulWidget {
   final MoodEntry mood;
   const _EntryCard(this.mood);
@@ -319,6 +318,8 @@ class _EntryCardState extends State<_EntryCard> {
     final tt = Theme.of(context).textTheme;
     final showEmoji = m.kind == EntryKind.map;
 
+    final weather = m.weather ?? Weather.unknown();
+
     return Card(
       elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -366,9 +367,10 @@ class _EntryCardState extends State<_EntryCard> {
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          '${m.weather.shortDescription} • ${m.weather.temperatureC.toStringAsFixed(0)}°C • Vind ${m.weather.windSpeed.toStringAsFixed(0)} m/s',
+                          '${weather.shortDescription} • ${weather.temperatureC.toStringAsFixed(0)}°C • Vind ${weather.windSpeed.toStringAsFixed(0)} m/s',
                           style: tt.bodyMedium?.copyWith(
-                              color: cs.onSurfaceVariant),
+                            color: cs.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     ],
