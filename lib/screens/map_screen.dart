@@ -1,12 +1,14 @@
+// lib/screens/map_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
 import '../models/mood_entry.dart';
 import '../services/mood_store.dart';
 import '../services/weather_service.dart';
+import '../models/weather.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -38,6 +40,7 @@ class _MapScreenState extends State<MapScreen> {
       ),
       builder: (_) => const _NewMoodSheet(),
     );
+
     if (!mounted || res == null) return;
 
     setState(() => _saving = true);
@@ -52,6 +55,7 @@ class _MapScreenState extends State<MapScreen> {
         position: latLng,
         weather: weather,
       );
+
       await context.read<MoodStore>().add(entry);
 
       if (!mounted) return;
@@ -71,6 +75,7 @@ class _MapScreenState extends State<MapScreen> {
   void _showDetails(MoodEntry m) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final weather = m.weather ?? Weather.unknown();
 
     showModalBottomSheet(
       context: context,
@@ -104,9 +109,9 @@ class _MapScreenState extends State<MapScreen> {
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    '${m.weather.shortDescription} • '
-                    '${m.weather.temperatureC.toStringAsFixed(0)}°C • '
-                    'Vind ${m.weather.windSpeed.toStringAsFixed(0)} m/s',
+                    '${weather.shortDescription} • '
+                    '${weather.temperatureC.toStringAsFixed(0)}°C • '
+                    'Vind ${weather.windSpeed.toStringAsFixed(0)} m/s',
                     style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
                   ),
                 ),
@@ -149,7 +154,7 @@ class _MapScreenState extends State<MapScreen> {
             children: [
               const SizedBox(height: 6),
               Text(
-                "Tryck på kartan för att lägga en emoji-markör (sparas med väder)",
+                "Tryck på kartan för att lägga en emoji‑markör (sparas med väder)",
                 textAlign: TextAlign.center,
                 style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
@@ -194,9 +199,10 @@ class _MapScreenState extends State<MapScreen> {
                                   child: GestureDetector(
                                     onTap: () => _showDetails(m),
                                     child: Center(
-                                      child: Text(m.emoji,
-                                          style:
-                                              const TextStyle(fontSize: 28)),
+                                      child: Text(
+                                        m.emoji,
+                                        style: const TextStyle(fontSize: 28),
+                                      ),
                                     ),
                                   ),
                                 );
@@ -233,9 +239,11 @@ class _MapScreenState extends State<MapScreen> {
                                 children: [
                                   const CircularProgressIndicator(),
                                   const SizedBox(height: 12),
-                                  Text('Sparar…',
-                                      style: tt.bodyMedium
-                                          ?.copyWith(color: Colors.white)),
+                                  Text(
+                                    'Sparar…',
+                                    style: tt.bodyMedium
+                                        ?.copyWith(color: Colors.white),
+                                  ),
                                 ],
                               ),
                             ),
@@ -295,8 +303,10 @@ class _NewMoodSheetState extends State<_NewMoodSheet> {
             ),
           ),
           const SizedBox(height: 12),
-          Text("Nytt humörinlägg",
-              style: tt.titleMedium?.copyWith(color: cs.onSurface)),
+          Text(
+            "Nytt humörinlägg",
+            style: tt.titleMedium?.copyWith(color: cs.onSurface),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -326,7 +336,9 @@ class _NewMoodSheetState extends State<_NewMoodSheet> {
             decoration: InputDecoration(
               hintText: "Hur mår du här?",
               hintStyle: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
               enabledBorder: OutlineInputBorder(
                 borderSide: BorderSide(color: cs.outlineVariant),
                 borderRadius: BorderRadius.circular(8),

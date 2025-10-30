@@ -3,10 +3,9 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:latlong2/latlong.dart';
-
 import '../services/mood_store.dart';
-import '../models/mood_entry.dart';
 import '../services/weather_service.dart';
+import '../models/mood_entry.dart';
 
 class StatistikPage extends StatefulWidget {
   const StatistikPage({super.key});
@@ -16,64 +15,51 @@ class StatistikPage extends StatefulWidget {
 }
 
 class _StatistikPageState extends State<StatistikPage> {
-  static const LatLng _fallback = LatLng(57.7089, 11.9746); // Göteborg
-
-  late DateTime _weekStart;             // Måndagen för aktiv vecka
-  late List<DateTime> _weekDays;        // Mån..Sön (aktiv vecka)
-  late LatLng _weekBaseAt;              // EN basplats för hela veckan
-  Map<String, int> _dailyCodes = {};    // 'YYYY-MM-DD' -> weather_code
-  bool _loading = true;
-  bool _error = false;
+  late DateTime _weekStart;
+  late List<DateTime> _weekDays;
+  Map<DateTime, int>? _weatherCodes; // väderdata per dag
 
   @override
   void initState() {
     super.initState();
-    _weekStart = _mondayOf(DateTime.now());
+    _initWeek();
+    _loadWeather();
+  }
+
+  void _initWeek() {
+    final nowLocal = DateTime.now();
+    _weekStart = _mondayOf(nowLocal);
     _weekDays = _daysOfWeek(_weekStart);
-    _weekBaseAt = _pickBaseLocationOnce();
-    _loadWeekWeather();
+  }
+
+  Future<void> _loadWeather() async {
+    try {
+      // Göteborgs koordinater
+      const gothenburg = LatLng(57.7089, 11.9746);
+
+      final codes = await WeatherService.fetchDailyWeatherCodes(
+        at: gothenburg,
+        start: _weekStart,
+        end: _weekStart.add(const Duration(days: 6)),
+      );
+
+      setState(() {
+        _weatherCodes = {
+          for (final entry in codes.entries) DateTime.parse(entry.key): entry.value
+        };
+      });
+    } catch (e) {
+      debugPrint('Fel vid väderhämtning: $e');
+    }
   }
 
   DateTime _mondayOf(DateTime dt) {
     final d = DateTime(dt.year, dt.month, dt.day);
-    return d.subtract(Duration(days: d.weekday - 1)); // 1 = måndag
+    return d.subtract(Duration(days: d.weekday - 1));
   }
 
   List<DateTime> _daysOfWeek(DateTime monday) =>
       List.generate(7, (i) => monday.add(Duration(days: i)));
-
-  /// Välj EN basplats för väder för denna vecka (senaste loggens plats eller fallback).
-  LatLng _pickBaseLocationOnce() {
-    final entries = context.read<MoodStore>().entries;
-    if (entries.isNotEmpty) {
-      final last = entries.last;
-      return LatLng(last.position.latitude, last.position.longitude);
-    }
-    return _fallback;
-  }
-
-  Future<void> _loadWeekWeather() async {
-    try {
-      final codes = await WeatherService.fetchDailyWeatherCodes(
-        at: _weekBaseAt,
-        start: _weekDays.first,
-        end: _weekDays.last,
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _dailyCodes = codes;
-        _loading = false;
-        _error = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = true;
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,31 +68,24 @@ class _StatistikPageState extends State<StatistikPage> {
     final store = context.watch<MoodStore>();
     final entries = store.entries;
 
-    // --- Bygg serier ---
+    // --- humör per veckodag ---
     final moodSeriesNullable = <double?>[];
-    final weatherSeries = <double>[];
     final xLabels = _weekdayLabelsSv(_weekDays);
-    final xWeatherEmojis = <String>[]; // ☀️/☁️/🌧️
 
     for (final d in _weekDays) {
-      // Humör (emoji -> 0..10), medel per dag
-      final todays = entries.where((e) => _isSameDay(e.date, d)).toList();
+      final todays = entries
+          .where((e) => _sameLocalDay(_entryLocalDate(e), d))
+          .toList();
       final moodVals = todays.map((e) => _scoreFromEmoji(e.emoji)).toList();
-      final avgMood =
-          moodVals.isEmpty ? null : moodVals.reduce((a, b) => a + b) / moodVals.length;
+      final avgMood = moodVals.isEmpty
+          ? null
+          : moodVals.reduce((a, b) => a + b) / moodVals.length;
       moodSeriesNullable.add(avgMood);
-
-      // Väder (från cachade koder för veckans basplats)
-      final key = _dateKey(d);
-      final code = _dailyCodes[key];
-      final wScore = code == null ? 5.0 : _weatherCodeToScore(code);
-      weatherSeries.add(wScore);
-      xWeatherEmojis.add(code == null ? '' : _weatherEmojiFromCode(code));
     }
 
     final moodSeries = _fillGaps(moodSeriesNullable, 5.0);
 
-    // --- Sammanfattning ---
+    // --- sammanfattning ---
     final allMoodValues = entries.map((e) => _scoreFromEmoji(e.emoji)).toList();
     final avgAll = allMoodValues.isEmpty
         ? 0.0
@@ -118,18 +97,10 @@ class _StatistikPageState extends State<StatistikPage> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
-            // Kolla om ny vecka startat → byt vecka & basplats; annars behåll basplats.
-            final nowMonday = _mondayOf(DateTime.now());
             setState(() {
-              _loading = true;
-              _error = false;
-              if (!_isSameDay(nowMonday, _weekStart)) {
-                _weekStart = nowMonday;
-                _weekDays = _daysOfWeek(_weekStart);
-                _weekBaseAt = _pickBaseLocationOnce(); // välj om vid ny vecka
-              }
+              _initWeek();
             });
-            await _loadWeekWeather();
+            await _loadWeather();
           },
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -140,86 +111,73 @@ class _StatistikPageState extends State<StatistikPage> {
                   children: [
                     const _SectionTitle(
                       icon: Icons.show_chart,
-                      text: 'Denna vecka · Humör vs. väder',
+                      text: 'Denna vecka · Humör och väder',
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Wrap(
                       spacing: 10,
                       runSpacing: 4,
                       children: const [
                         _LegendDot(label: 'Humör', colorDot: null),
-                        _LegendDot(label: 'Väder → humör', colorDot: Colors.teal),
-                        _LegendEmoji(emoji: '😔', label: 'Lägre'),
-                        _LegendEmoji(emoji: '😐', label: 'Neutralt'),
-                        _LegendEmoji(emoji: '😄', label: 'Högre'),
+                        _LegendEmoji(emoji: '😔', label: 'Lågt'),
+                        _LegendEmoji(emoji: '😐', label: 'Medel'),
+                        _LegendEmoji(emoji: '😄', label: 'Högt'),
                       ],
                     ),
                     const SizedBox(height: 14),
-                    if (_loading)
-                      const SizedBox(
-                        height: 220,
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    else if (_error)
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          'Kunde inte hämta veckans väder just nu.',
-                          style: theme.textTheme.bodyMedium?.copyWith(color: cs.error),
-                        ),
-                      )
-                    else
-                      SizedBox(
-                        height: 260,
-                        child: _DualLineChart(
-                          xLabels: xLabels,
-                          xWeatherEmojis: xWeatherEmojis, // ☀️/☁️/🌧️ under X
-                          line1: moodSeries,               // humör
-                          line2: weatherSeries,            // väder→humör
-                          line1Color: cs.primary,
-                          line2Color: Colors.teal,
-                          gridColor: theme.dividerColor.withOpacity(.35),
-                          yTickEmojis: const ['😔', '😐', '😄'],
-                          yTickValues: const [3.0, 5.0, 8.0],
-                        ),
+                    SizedBox(
+                      height: 260,
+                      child: _SingleLineChart(
+                        xLabels: xLabels,
+                        values: moodSeries,
+                        color: cs.primary,
+                        gridColor: theme.dividerColor.withOpacity(.35),
+                        yTickEmojis: const ['😔', '😐', '😄'],
+                        yTickValues: const [3.0, 5.0, 8.0],
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_weatherCodes != null)
+  Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: List.generate(_weekDays.length, (i) {
+        final day = _weekDays[i];
+        final code = _weatherCodes![day];
+        final emoji =
+            code != null ? _emojiForWeatherCode(code) : '–';
+        return Text(
+          emoji,
+          style: const TextStyle(fontSize: 16),
+        );
+      }),
+    ),
+  )
+else
+  const Padding(
+    padding: EdgeInsets.only(top: 8),
+    child: Text('Hämtar väder...', style: TextStyle(fontSize: 12)),
+  ),
+
                     const SizedBox(height: 8),
                     Opacity(
                       opacity: .7,
                       child: Text(
-                        'Dra nedåt för att uppdatera vädret för veckan.',
+                        'Dra nedåt för att uppdatera humör och väder.',
                         style: theme.textTheme.labelSmall,
                       ),
                     ),
                   ],
                 ),
               ),
-
               const SizedBox(height: 14),
-
-              // Enkel placeholder för "Humör per plats" (samma som tidigare)
-              _SectionCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    _SectionTitle(icon: Icons.bar_chart, text: 'Humör per plats (exempel)'),
-                    SizedBox(height: 8),
-                    _PlaceBarRow(place: _PlaceMood('Hemma', 6.2)),
-                    _PlaceBarRow(place: _PlaceMood('Skola', 5.1)),
-                    _PlaceBarRow(place: _PlaceMood('Gym', 7.9)),
-                    _PlaceBarRow(place: _PlaceMood('Café', 7.1)),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Sammanfattning
               Row(
                 children: [
                   _SummaryCard(
                     title: 'Snitt',
-                    value: allMoodValues.isEmpty ? '–' : avgAll.toStringAsFixed(1),
+                    value:
+                        allMoodValues.isEmpty ? '–' : avgAll.toStringAsFixed(1),
                     icon: Icons.emoji_emotions,
                   ).expanded(),
                   const SizedBox(width: 10),
@@ -242,14 +200,92 @@ class _StatistikPageState extends State<StatistikPage> {
       ),
     );
   }
+
+  // === Hjälpmetoder ===
+
+  String _emojiForWeatherCode(int code) {
+    if (code == 0) return '☀️';
+    if (code == 1) return '🌤️';
+    if (code == 2 || code == 3) return '☁️';
+    if (code == 45 || code == 48) return '🌫️';
+    if (code == 51 || code == 53 || code == 55) return '🌦️';
+    if (code == 61 || code == 63 || code == 65) return '🌧️';
+    if (code == 66 || code == 67) return '🌧️❄️';
+    if (code == 71 || code == 73 || code == 75 || code == 77) return '❄️';
+    if (code >= 80 && code <= 82) return '🌧️';
+    if (code >= 95) return '⛈️';
+    return '❓';
+  }
+
+  DateTime _entryLocalDate(MoodEntry e) {
+    final dt = e.date;
+    final local = dt.isUtc ? dt.toLocal() : dt;
+    return DateTime(local.year, local.month, local.day);
+  }
+
+  bool _sameLocalDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  double _scoreFromEmoji(String e) {
+    const ordered = [
+      "😭",
+      "😫",
+      "😢",
+      "☹️",
+      "🙁",
+      "😐",
+      "🙂",
+      "😊",
+      "😄",
+      "😃",
+      "😁",
+    ];
+    final i = ordered.indexOf(e);
+    return i < 0 ? 5.0 : i.toDouble();
+  }
+
+  List<double> _fillGaps(List<double?> src, double fallback) {
+    if (src.isEmpty) return [];
+    final out = List<double?>.from(src);
+    double last =
+        src.firstWhere((e) => e != null, orElse: () => fallback) ?? fallback;
+    for (int i = 0; i < out.length; i++) {
+      out[i] ??= last;
+      last = out[i]!;
+    }
+    for (int i = out.length - 2; i >= 0; i--) {
+      if (src[i] == null) out[i] = out[i + 1];
+    }
+    return out.cast<double>();
+  }
+
+  List<String> _weekdayLabelsSv(List<DateTime> days) {
+    const names = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
+    return days.map((d) => names[d.weekday - 1]).toList();
+  }
+
+  T? _mostCommon<T>(Iterable<T> items) {
+    final map = <T, int>{};
+    for (final v in items) {
+      map[v] = (map[v] ?? 0) + 1;
+    }
+    T? best;
+    int bestCount = -1;
+    map.forEach((k, c) {
+      if (c > bestCount) {
+        best = k;
+        bestCount = c;
+      }
+    });
+    return best;
+  }
 }
 
-/* ----------------------------- UI–hjälpwidgets ---------------------------- */
+/* ----------------------------- UI ---------------------------- */
 
 class _SectionCard extends StatelessWidget {
   const _SectionCard({required this.child});
   final Widget child;
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -277,7 +313,6 @@ class _SectionTitle extends StatelessWidget {
   const _SectionTitle({required this.icon, required this.text});
   final IconData icon;
   final String text;
-
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -298,7 +333,6 @@ class _LegendDot extends StatelessWidget {
   const _LegendDot({required this.label, this.colorDot});
   final String label;
   final Color? colorDot;
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -325,7 +359,6 @@ class _LegendEmoji extends StatelessWidget {
   const _LegendEmoji({required this.emoji, required this.label});
   final String emoji;
   final String label;
-
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -348,7 +381,6 @@ class _SummaryCard extends StatelessWidget {
   final String title;
   final String value;
   final IconData icon;
-
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context);
@@ -391,27 +423,21 @@ extension on Widget {
   Widget expanded() => Expanded(child: this);
 }
 
-/* --------- Linjediagram (två linjer + emoji-Y + väder-emoji X) -------- */
+/* -------- Enkel linjegraf -------- */
 
-class _DualLineChart extends StatelessWidget {
-  const _DualLineChart({
+class _SingleLineChart extends StatelessWidget {
+  const _SingleLineChart({
     required this.xLabels,
-    required this.xWeatherEmojis,
-    required this.line1,
-    required this.line2,
-    required this.line1Color,
-    required this.line2Color,
+    required this.values,
+    required this.color,
     required this.gridColor,
     required this.yTickEmojis,
     required this.yTickValues,
   });
 
   final List<String> xLabels;
-  final List<String> xWeatherEmojis; // ☀️/☁️/🌧️
-  final List<double> line1; // humör
-  final List<double> line2; // väder→humör
-  final Color line1Color;
-  final Color line2Color;
+  final List<double> values;
+  final Color color;
   final Color gridColor;
   final List<String> yTickEmojis;
   final List<double> yTickValues;
@@ -419,13 +445,10 @@ class _DualLineChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _DualLineChartPainter(
+      painter: _SingleLineChartPainter(
         xLabels: xLabels,
-        xWeatherEmojis: xWeatherEmojis,
-        line1: line1,
-        line2: line2,
-        line1Color: line1Color,
-        line2Color: line2Color,
+        values: values,
+        color: color,
         gridColor: gridColor,
         yTickEmojis: yTickEmojis,
         yTickValues: yTickValues,
@@ -439,14 +462,11 @@ class _DualLineChart extends StatelessWidget {
   }
 }
 
-class _DualLineChartPainter extends CustomPainter {
-  _DualLineChartPainter({
+class _SingleLineChartPainter extends CustomPainter {
+  _SingleLineChartPainter({
     required this.xLabels,
-    required this.xWeatherEmojis,
-    required this.line1,
-    required this.line2,
-    required this.line1Color,
-    required this.line2Color,
+    required this.values,
+    required this.color,
     required this.gridColor,
     required this.yTickEmojis,
     required this.yTickValues,
@@ -454,11 +474,8 @@ class _DualLineChartPainter extends CustomPainter {
   });
 
   final List<String> xLabels;
-  final List<String> xWeatherEmojis;
-  final List<double> line1;
-  final List<double> line2;
-  final Color line1Color;
-  final Color line2Color;
+  final List<double> values;
+  final Color color;
   final Color gridColor;
   final List<String> yTickEmojis;
   final List<double> yTickValues;
@@ -469,9 +486,8 @@ class _DualLineChartPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (line1.isEmpty || line2.isEmpty) return;
+    if (values.isEmpty) return;
 
-    // extra space nederst för X-etikett + väder-emoji
     const padding = EdgeInsets.fromLTRB(36, 16, 12, 42);
     final rect = Rect.fromLTWH(
       padding.left,
@@ -480,11 +496,11 @@ class _DualLineChartPainter extends CustomPainter {
       size.height - padding.top - padding.bottom,
     );
 
-    // Grid (Y)
     final gridPaint = Paint()
       ..color = gridColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
+
     for (final yv in yTickValues) {
       final dy = _mapY(yv, rect);
       canvas.drawLine(Offset(rect.left, dy), Offset(rect.right, dy), gridPaint);
@@ -497,95 +513,32 @@ class _DualLineChartPainter extends CustomPainter {
       _drawText(canvas, emoji, Offset(rect.left - 26, dy - 8), labelStyle);
     }
 
-    // X-etiketter + väder-emoji
+    // X-etiketter
     final stepX = rect.width / (xLabels.length - 1);
     for (int i = 0; i < xLabels.length; i++) {
       final dx = rect.left + stepX * i;
       _drawText(canvas, xLabels[i], Offset(dx - 10, rect.bottom + 6), labelStyle);
-
-      final emoji = (i < xWeatherEmojis.length) ? xWeatherEmojis[i] : '';
-      if (emoji.isNotEmpty) {
-        _drawText(canvas, emoji, Offset(dx - 8, rect.bottom + 20), labelStyle);
-      }
     }
 
-    // Förbered punkter
-    final pts1 = _pointsFor(line1, rect);
-    final pts2 = _pointsFor(line2, rect);
-
-    // Linje 1: Humör (hel linje)
-    _drawPolyline(canvas, pts1, line1Color, dashed: false);
-
-    // Linje 2: Väder (streckad)
-    _drawPolyline(canvas, pts2, line2Color, dashed: true);
-
-    // Punkter
-    final p1 = Paint()..color = line1Color;
-    final p2 = Paint()..color = line2Color;
-    for (final p in pts1) {
-      canvas.drawCircle(p, 3.0, p1);
-    }
-    for (final p in pts2) {
-      canvas.drawCircle(p, 3.0, p2);
-    }
-  }
-
-  List<Offset> _pointsFor(List<double> values, Rect rect) {
-    final stepX = rect.width / (values.length - 1);
-    final pts = <Offset>[];
-    for (int i = 0; i < values.length; i++) {
+    final pts = List<Offset>.generate(values.length, (i) {
       final x = rect.left + stepX * i;
       final y = _mapY(values[i], rect);
-      pts.add(Offset(x, y));
-    }
-    return pts;
-  }
+      return Offset(x, y);
+    });
 
-  void _drawPolyline(Canvas canvas, List<Offset> pts, Color color, {required bool dashed}) {
     final paint = Paint()
       ..color = color
       ..strokeWidth = 2.6
       ..style = PaintingStyle.stroke
       ..isAntiAlias = true;
 
-    if (!dashed) {
-      for (int i = 1; i < pts.length; i++) {
-        canvas.drawLine(pts[i - 1], pts[i], paint);
-      }
-    } else {
-      const dash = 6.0;
-      const gap = 4.0;
-      for (int i = 1; i < pts.length; i++) {
-        _drawDashedSegment(canvas, pts[i - 1], pts[i], paint, dash, gap);
-      }
+    for (int i = 1; i < pts.length; i++) {
+      canvas.drawLine(pts[i - 1], pts[i], paint);
     }
-  }
 
-  void _drawDashedSegment(
-    Canvas canvas,
-    Offset a,
-    Offset b,
-    Paint paint,
-    double dash,
-    double gap,
-  ) {
-    final dx = b.dx - a.dx;
-    final dy = b.dy - a.dy;
-    final dist = sqrt(dx * dx + dy * dy);
-    if (dist == 0) return;
-
-    final ux = dx / dist;
-    final uy = dy / dist;
-    double drawn = 0;
-
-    while (drawn < dist) {
-      final len = min(dash, dist - drawn);
-      final sx = a.dx + ux * drawn;
-      final sy = a.dy + uy * drawn;
-      final ex = a.dx + ux * (drawn + len);
-      final ey = a.dy + uy * (drawn + len);
-      canvas.drawLine(Offset(sx, sy), Offset(ex, ey), paint);
-      drawn += dash + gap;
+    final dotPaint = Paint()..color = color;
+    for (final p in pts) {
+      canvas.drawCircle(p, 3.0, dotPaint);
     }
   }
 
@@ -603,172 +556,5 @@ class _DualLineChartPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _DualLineChartPainter old) => true;
-}
-
-/* ------------------------------- Hjälpfunktioner -------------------------- */
-
-bool _isSameDay(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;
-
-/// Format YYYY-MM-DD (för _dailyCodes-nyckeln)
-String _dateKey(DateTime d) =>
-    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-
-/// Emoji -> 0..10 (enkel ordning)
-double _scoreFromEmoji(String e) {
-  const ordered = ["😭","😫","😢","☹️","🙁","😐","🙂","😊","😄","😃","😁"];
-  final i = ordered.indexOf(e);
-  if (i < 0) return 5.0;
-  return i.toDouble();
-}
-
-/// Open-Meteo weathercode -> approx “humörscore” (för väderlinjen)
-double _weatherCodeToScore(int code) {
-  if (code == 0) return 8.5; // klart
-  if ([1, 2, 3].contains(code)) return 6.0; // halvklart/mulet
-  if ([45, 48].contains(code)) return 4.0; // dimma
-  if ([51, 53, 55, 61, 63, 65, 80, 81, 82].contains(code)) return 3.5; // regn
-  if ([71, 73, 75].contains(code)) return 5.5; // snö
-  if ([95, 96, 99].contains(code)) return 3.0; // åska
-  return 5.0;
-}
-
-/// Emoji för kod – förenklad (visas under X-axeln)
-String _weatherEmojiFromCode(int code) {
-  if (code == 0) return '☀️'; // klart
-  if ([51, 53, 55, 61, 63, 65, 80, 81, 82].contains(code)) return '🌧️'; // regn
-  return '☁️'; // övrigt (moln/dimma/snö etc. förenklat)
-}
-
-/// Fyll null-värden i humörserien så att linjen inte bryts
-List<double> _fillGaps(List<double?> source, double fallback) {
-  if (source.isEmpty) return [];
-  final out = List<double?>.from(source);
-
-  double last = source.firstWhere((e) => e != null, orElse: () => fallback) ?? fallback;
-  for (int i = 0; i < out.length; i++) {
-    out[i] ??= last;
-    last = out[i]!;
-  }
-  for (int i = out.length - 2; i >= 0; i--) {
-    if (source[i] == null) out[i] = out[i + 1];
-  }
-  return out.cast<double>();
-}
-
-/// Veckodagar på svenska (Mån..Sön)
-List<String> _weekdayLabelsSv(List<DateTime> days) {
-  const names = ['Mån','Tis','Ons','Tor','Fre','Lör','Sön'];
-  return List<String>.generate(days.length, (i) => names[i % 7]);
-}
-
-/// Vanligaste värdet i en iterable
-T? _mostCommon<T>(Iterable<T> items) {
-  final map = <T, int>{};
-  for (final v in items) {
-    map[v] = (map[v] ?? 0) + 1;
-  }
-  T? best;
-  int bestCount = -1;
-  map.forEach((k, c) {
-    if (c > bestCount) {
-      best = k;
-      bestCount = c;
-    }
-  });
-  return best;
-}
-
-/* ----------------------- Dummy “plats”-UI (placeholder) ------------------- */
-
-class _PlaceMood {
-  final String name;
-  final double value;
-  const _PlaceMood(this.name, this.value);
-}
-
-class _PlaceBarRow extends StatelessWidget {
-  const _PlaceBarRow({required this.place});
-  final _PlaceMood place;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 72,
-            child: Text(
-              place.name,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelMedium
-                  ?.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, c) {
-                final width = c.maxWidth * (place.value / 10).clamp(0.0, 1.0);
-                return Stack(
-                  alignment: Alignment.centerLeft,
-                  children: [
-                    Container(
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: cs.surfaceVariant,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 350),
-                      height: 14,
-                      width: width,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(999),
-                        gradient: LinearGradient(
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
-                          colors: [
-                            cs.primary.withOpacity(.90),
-                            cs.primary.withOpacity(.55),
-                          ],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: cs.primary.withOpacity(.20),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: cs.secondaryContainer,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              place.value.toStringAsFixed(1),
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: cs.onSecondaryContainer,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  bool shouldRepaint(covariant _SingleLineChartPainter old) => true;
 }
