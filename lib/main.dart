@@ -16,12 +16,7 @@ Future<void> main() async {
   final store = MoodStore();
   await store.load();
 
-  runApp(
-    ChangeNotifierProvider.value(
-      value: store,
-      child: const MoodMapApp(),
-    ),
-  );
+  runApp(ChangeNotifierProvider.value(value: store, child: const MoodMapApp()));
 }
 
 class MoodMapApp extends StatefulWidget {
@@ -111,10 +106,22 @@ class _MainNavigationPageState extends State<MainNavigationPage> {
         showUnselectedLabels: true,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Hem'),
-          BottomNavigationBarItem(icon: Icon(Icons.edit_outlined), label: 'Logga'),
-          BottomNavigationBarItem(icon: Icon(Icons.map_outlined), label: 'Karta'),
-          BottomNavigationBarItem(icon: Icon(Icons.bar_chart_outlined), label: 'Statistik'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'Profil'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.edit_outlined),
+            label: 'Logga',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.map_outlined),
+            label: 'Karta',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.bar_chart_outlined),
+            label: 'Statistik',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            label: 'Profil',
+          ),
         ],
       ),
     );

@@ -42,21 +42,22 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
     }
   }
 
-  Future<void> _onQuickSave(String note) async {
+  // ⬇️ NYTT: ta emot emoji från snabbloggen
+  Future<void> _onQuickSave(String note, String emoji) async {
     final weather = _weather ?? Weather.unknown();
     final entry = MoodEntry(
       kind: EntryKind.home,
-      emoji: '🙂',
+      emoji: emoji,
       note: note.trim().isEmpty ? '(Ingen anteckning)' : note.trim(),
-      date: DateTime.now(),
+      date: DateTime.now().toUtc(), // spara konsekvent i UTC
       position: _fallbackCenter,
       weather: weather,
     );
     await context.read<MoodStore>().add(entry);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Humör sparat!')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Humör sparat!')));
   }
 
   @override
@@ -64,10 +65,12 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
     final allEntries = context.watch<MoodStore>().entries.reversed.toList();
     final theme = Theme.of(context);
 
-    final homeEntries =
-        allEntries.where((e) => e.kind == EntryKind.home).toList();
-    final mapEntries =
-        allEntries.where((e) => e.kind == EntryKind.map).toList();
+    final homeEntries = allEntries
+        .where((e) => e.kind == EntryKind.home)
+        .toList();
+    final mapEntries = allEntries
+        .where((e) => e.kind == EntryKind.map)
+        .toList();
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
@@ -78,7 +81,7 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
           children: [
             _QuickLogCard(
               isLoadingWeather: _loadingWeather,
-              onSave: _onQuickSave,
+              onSave: _onQuickSave, // ⬅️ skickar vidare till metoden ovan
             ),
             const SizedBox(height: 20),
             _SectionHeader(text: 'Hemloggar (${homeEntries.length})'),
@@ -100,13 +103,11 @@ class _MoodLogScreenState extends State<MoodLogScreen> {
 }
 
 class _QuickLogCard extends StatefulWidget {
+  // ⬇️ ändrat: onSave tar även emoji
+  final Future<void> Function(String note, String emoji) onSave;
   final bool isLoadingWeather;
-  final Future<void> Function(String note) onSave;
 
-  const _QuickLogCard({
-    required this.isLoadingWeather,
-    required this.onSave,
-  });
+  const _QuickLogCard({required this.isLoadingWeather, required this.onSave});
 
   @override
   State<_QuickLogCard> createState() => _QuickLogCardState();
@@ -115,6 +116,10 @@ class _QuickLogCard extends StatefulWidget {
 class _QuickLogCardState extends State<_QuickLogCard> {
   final _ctrl = TextEditingController();
   bool _saving = false;
+
+  // ⬇️ NYTT: valbar emoji för snabbloggen
+  final List<String> _choices = ['😔', '😐', '😄'];
+  String _selected = '😐';
 
   @override
   void dispose() {
@@ -126,7 +131,7 @@ class _QuickLogCardState extends State<_QuickLogCard> {
     final note = _ctrl.text.trim();
     if (note.isEmpty || _saving) return;
     setState(() => _saving = true);
-    await widget.onSave(note);
+    await widget.onSave(note, _selected);
     if (!mounted) return;
     FocusScope.of(context).unfocus();
     setState(() => _saving = false);
@@ -154,9 +159,28 @@ class _QuickLogCardState extends State<_QuickLogCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Hur mår du idag?',
-              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          Text(
+            'Hur mår du idag?',
+            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 10),
+
+          // ⬇️ NYTT: Emoji-väljare (lågt / medel / högt)
+          Row(
+            children: _choices.map((e) {
+              final bool active = e == _selected;
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(e, style: const TextStyle(fontSize: 16)),
+                  selected: active,
+                  onSelected: (_) => setState(() => _selected = e),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 10),
+
           TextField(
             controller: _ctrl,
             maxLines: 3,
@@ -179,6 +203,7 @@ class _QuickLogCardState extends State<_QuickLogCard> {
             ),
           ),
           const SizedBox(height: 10),
+
           Row(
             children: [
               if (widget.isLoadingWeather)
@@ -305,9 +330,9 @@ class _EntryCardState extends State<_EntryCard> {
     if (confirmed == true) {
       final store = context.read<MoodStore>();
       store.remove(entry);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Inlägg borttaget!')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Inlägg borttaget!')));
     }
   }
 
@@ -341,7 +366,10 @@ class _EntryCardState extends State<_EntryCard> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        DateFormat('d MMM yyyy HH:mm', 'sv_SE').format(m.date),
+                        DateFormat(
+                          'd MMM yyyy HH:mm',
+                          'sv_SE',
+                        ).format(m.date.toLocal()),
                         style: tt.titleMedium?.copyWith(
                           color: cs.onSurfaceVariant,
                           fontWeight: FontWeight.w600,
@@ -378,14 +406,14 @@ class _EntryCardState extends State<_EntryCard> {
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Icon(Icons.place_outlined,
-                          size: 16, color: cs.secondary),
+                      Icon(Icons.place_outlined, size: 16, color: cs.secondary),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           _locationName ?? 'Hämtar plats...',
-                          style: tt.bodyMedium
-                              ?.copyWith(color: cs.onSurfaceVariant),
+                          style: tt.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),

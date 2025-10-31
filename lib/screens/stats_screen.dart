@@ -1,3 +1,5 @@
+// lib/screens/stats_screen.dart
+import 'package:flutter/foundation.dart'; // kDebugMode
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:latlong2/latlong.dart';
@@ -15,7 +17,8 @@ class StatistikPage extends StatefulWidget {
 class _StatistikPageState extends State<StatistikPage> {
   late DateTime _weekStart;
   late List<DateTime> _weekDays;
-  Map<DateTime, int>? _weatherCodes;
+
+  Map<String, int>? _weatherCodes; // "YYYY-MM-DD" -> Open-Meteo weathercode
 
   @override
   void initState() {
@@ -38,12 +41,8 @@ class _StatistikPageState extends State<StatistikPage> {
         start: _weekStart,
         end: _weekStart.add(const Duration(days: 6)),
       );
-
-      setState(() {
-        _weatherCodes = {
-          for (final entry in codes.entries) DateTime.parse(entry.key): entry.value
-        };
-      });
+      if (!mounted) return;
+      setState(() => _weatherCodes = codes);
     } catch (e) {
       debugPrint('Fel vid väderhämtning: $e');
     }
@@ -51,11 +50,16 @@ class _StatistikPageState extends State<StatistikPage> {
 
   DateTime _mondayOf(DateTime dt) {
     final d = DateTime(dt.year, dt.month, dt.day);
-    return d.subtract(Duration(days: d.weekday - 1));
+    return d.subtract(Duration(days: d.weekday - 1)); // 1=mån
   }
 
   List<DateTime> _daysOfWeek(DateTime monday) =>
       List.generate(7, (i) => monday.add(Duration(days: i)));
+
+  String _dateKeyLocal(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
@@ -64,33 +68,75 @@ class _StatistikPageState extends State<StatistikPage> {
     final store = context.watch<MoodStore>();
     final entries = store.entries;
 
-    final moodSeriesNullable = <double?>[];
     final xLabels = _weekdayLabelsSv(_weekDays);
 
+    // 1) Medelhumör per dag (null där det saknas)
+    List<double?> moodSeriesNullable = [];
+    final rawValuesThisWeek = <double>[];
+
     for (final d in _weekDays) {
-      final todays = entries.where((e) => _sameLocalDay(_entryLocalDate(e), d)).toList();
-      final moodVals = todays.map((e) => _scoreFromEmoji(e.emoji)).toList();
-      final avgMood =
-          moodVals.isEmpty ? null : moodVals.reduce((a, b) => a + b) / moodVals.length;
-      moodSeriesNullable.add(avgMood);
+      final todays = entries.where((e) => _sameLocalDay(_entryLocalDate(e), d));
+      final todaysVals = todays.map((e) => _scoreFromEmoji(e.emoji)).toList();
+      final avg = todaysVals.isEmpty
+          ? null
+          : todaysVals.reduce((a, b) => a + b) / todaysVals.length;
+      moodSeriesNullable.add(avg);
+      if (avg != null) rawValuesThisWeek.add(avg);
     }
 
-    final moodSeries = _fillGaps(moodSeriesNullable, 5.0);
+    // ---------- DEMO-LINE (debug-only): fyll mån–tor om för få punkter ----------
+    if (kDebugMode) {
+      final nonNullCount = moodSeriesNullable.where((v) => v != null).length;
+      if (nonNullCount < 2) {
+        // behåll ev. befintliga värden, fyll luckor mån–tor med en snygg linje
+        final demo = <double>[6.5, 5.5, 7.0, 6.0]; // justerbar smakprofil 🙂
+        for (int i = 0; i < 4 && i < moodSeriesNullable.length; i++) {
+          moodSeriesNullable[i] ??= demo[i];
+        }
+      }
+    }
+    // ---------------------------------------------------------------------------
 
+    // 2) Auto-skala Y-axeln runt faktiska punkter vi kommer rita
+    final plottedValues = moodSeriesNullable.whereType<double>().toList(
+      growable: false,
+    );
+
+    double minY = 0, maxY = 10;
+    if (plottedValues.isNotEmpty) {
+      minY = plottedValues.reduce((a, b) => a < b ? a : b);
+      maxY = plottedValues.reduce((a, b) => a > b ? a : b);
+      if (minY == maxY) {
+        minY = (minY - 0.8).clamp(0.0, 10.0);
+        maxY = (maxY + 0.8).clamp(0.0, 10.0);
+      } else {
+        const pad = 0.7;
+        minY = (minY - pad).clamp(0.0, 10.0);
+        maxY = (maxY + pad).clamp(0.0, 10.0);
+      }
+    }
+
+    // 3) Stats
     final allMoodValues = entries.map((e) => _scoreFromEmoji(e.emoji)).toList();
     final avgAll = allMoodValues.isEmpty
         ? 0.0
         : allMoodValues.reduce((a, b) => a + b) / allMoodValues.length;
     final mostCommonEmoji = _mostCommon(entries.map((e) => e.emoji));
 
+    // 4) Väder-emoji-lista i samma ordning som x-axeln
+    final weatherEmojis = _weatherCodes != null
+        ? _weekDays.map((d) {
+            final code = _weatherCodes![_dateKeyLocal(d)];
+            return code != null ? _emojiForWeatherCode(code) : '·';
+          }).toList()
+        : null;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Statistik'), centerTitle: true),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
-            setState(() {
-              _initWeek();
-            });
+            setState(_initWeek);
             await _loadWeather();
           },
           child: ListView(
@@ -120,19 +166,22 @@ class _StatistikPageState extends State<StatistikPage> {
                       height: 260,
                       child: _SingleLineChart(
                         xLabels: xLabels,
-                        values: moodSeries,
+                        values: moodSeriesNullable,
                         color: cs.primary,
-                        gridColor: theme.dividerColor.withOpacity(.35),
+                        gridColor: theme.dividerColor.withValues(alpha: 0.35),
+                        yMin: minY,
+                        yMax: maxY,
                         yTickEmojis: const ['😔', '😐', '😄'],
-                        yTickValues: const [3.0, 5.0, 8.0],
-                        weatherEmojis: _weatherCodes != null
-                            ? _weekDays.map((d) {
-                                final code = _weatherCodes![d];
-                                return code != null ? _emojiForWeatherCode(code) : '–';
-                              }).toList()
-                            : null,
+                        weatherEmojis: weatherEmojis,
                       ),
                     ),
+                    if (kDebugMode) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Veckovärden: ${moodSeriesNullable.map((v) => v?.toStringAsFixed(1) ?? "–").join("  ")}',
+                        style: theme.textTheme.labelSmall,
+                      ),
+                    ],
                     const SizedBox(height: 8),
                     Opacity(
                       opacity: .7,
@@ -149,7 +198,9 @@ class _StatistikPageState extends State<StatistikPage> {
                 children: [
                   _SummaryCard(
                     title: 'Snitt',
-                    value: allMoodValues.isEmpty ? '–' : avgAll.toStringAsFixed(1),
+                    value: allMoodValues.isEmpty
+                        ? '–'
+                        : avgAll.toStringAsFixed(1),
                     icon: Icons.emoji_emotions,
                   ).expanded(),
                   const SizedBox(width: 10),
@@ -197,25 +248,33 @@ class _StatistikPageState extends State<StatistikPage> {
       a.year == b.year && a.month == b.month && a.day == b.day;
 
   double _scoreFromEmoji(String e) {
-    const ordered = [
-      "😭", "😫", "😢", "☹️", "🙁", "😐", "🙂", "😊", "😄", "😃", "😁",
-    ];
-    final i = ordered.indexOf(e);
-    return i < 0 ? 5.0 : i.toDouble();
-  }
-
-  List<double> _fillGaps(List<double?> src, double fallback) {
-    if (src.isEmpty) return [];
-    final out = List<double?>.from(src);
-    double last = src.firstWhere((e) => e != null, orElse: () => fallback) ?? fallback;
-    for (int i = 0; i < out.length; i++) {
-      out[i] ??= last;
-      last = out[i]!;
-    }
-    for (int i = out.length - 2; i >= 0; i--) {
-      if (src[i] == null) out[i] = out[i + 1];
-    }
-    return out.cast<double>();
+    const map = <String, int>{
+      '😭': 0,
+      '😫': 1,
+      '😢': 1,
+      '😡': 1,
+      '😠': 2,
+      '☹️': 3,
+      '🙁': 3,
+      '😞': 3,
+      '😟': 3,
+      '😕': 4,
+      '😔': 4,
+      '😣': 4,
+      '😤': 4,
+      '😐': 5,
+      '😶': 5,
+      '🙂': 6,
+      '😊': 7,
+      '☺️': 7,
+      '😄': 8,
+      '😃': 9,
+      '😁': 10,
+      '🤩': 10,
+      '😆': 9,
+      '😂': 8,
+    };
+    return (map[e] ?? 5).toDouble();
   }
 
   List<String> _weekdayLabelsSv(List<DateTime> days) {
@@ -253,10 +312,10 @@ class _SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.4)),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 14,
             spreadRadius: 1,
             offset: const Offset(0, 8),
@@ -275,9 +334,9 @@ class _SectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w800,
-          letterSpacing: .2,
-        );
+      fontWeight: FontWeight.w800,
+      letterSpacing: .2,
+    );
     return Row(
       children: [
         Icon(icon, size: 20),
@@ -349,10 +408,10 @@ class _SummaryCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.4)),
+        border: Border.all(color: cs.outlineVariant.withValues(alpha: 0.4)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 12,
             offset: const Offset(0, 8),
           ),
@@ -382,7 +441,7 @@ extension on Widget {
   Widget expanded() => Expanded(child: this);
 }
 
-/* -------- Enkel linjegraf -------- */
+/* -------- Enkel linjegraf (luckor + auto-skala) -------- */
 
 class _SingleLineChart extends StatelessWidget {
   const _SingleLineChart({
@@ -391,17 +450,19 @@ class _SingleLineChart extends StatelessWidget {
     required this.color,
     required this.gridColor,
     required this.yTickEmojis,
-    required this.yTickValues,
-    this.weatherEmojis,
+    required this.weatherEmojis,
+    required this.yMin,
+    required this.yMax,
   });
 
   final List<String> xLabels;
-  final List<double> values;
+  final List<double?> values;
   final Color color;
   final Color gridColor;
   final List<String> yTickEmojis;
-  final List<double> yTickValues;
   final List<String>? weatherEmojis;
+  final double yMin;
+  final double yMax;
 
   @override
   Widget build(BuildContext context) {
@@ -412,12 +473,12 @@ class _SingleLineChart extends StatelessWidget {
         color: color,
         gridColor: gridColor,
         yTickEmojis: yTickEmojis,
-        yTickValues: yTickValues,
-        labelStyle: Theme.of(context)
-            .textTheme
-            .labelSmall
-            ?.copyWith(fontWeight: FontWeight.w600),
+        labelStyle: Theme.of(
+          context,
+        ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
         weatherEmojis: weatherEmojis,
+        yMin: yMin,
+        yMax: yMax,
       ),
       child: const SizedBox.expand(),
     );
@@ -431,22 +492,21 @@ class _SingleLineChartPainter extends CustomPainter {
     required this.color,
     required this.gridColor,
     required this.yTickEmojis,
-    required this.yTickValues,
     required this.labelStyle,
     this.weatherEmojis,
+    required this.yMin,
+    required this.yMax,
   });
 
   final List<String>? weatherEmojis;
   final List<String> xLabels;
-  final List<double> values;
+  final List<double?> values;
   final Color color;
   final Color gridColor;
   final List<String> yTickEmojis;
-  final List<double> yTickValues;
   final TextStyle? labelStyle;
-
-  static const double _minY = 0.0;
-  static const double _maxY = 10.0;
+  final double yMin;
+  final double yMax;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -465,58 +525,87 @@ class _SingleLineChartPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
 
-    for (final yv in yTickValues) {
+    // Låg/medel/hög relativt yMin/yMax
+    final yGuide = <double>[
+      yMin + (yMax - yMin) * 0.25,
+      yMin + (yMax - yMin) * 0.50,
+      yMin + (yMax - yMin) * 0.75,
+    ];
+    for (final yv in yGuide) {
       final dy = _mapY(yv, rect);
       canvas.drawLine(Offset(rect.left, dy), Offset(rect.right, dy), gridPaint);
     }
 
-    for (int i = 0; i < yTickEmojis.length && i < yTickValues.length; i++) {
-      final emoji = yTickEmojis[i];
-      final dy = _mapY(yTickValues[i], rect);
-      _drawText(canvas, emoji, Offset(rect.left - 26, dy - 8), labelStyle);
+    // Emoji på Y-axel
+    final yEmojiPos = <double>[
+      yMin + (yMax - yMin) * 0.20,
+      yMin + (yMax - yMin) * 0.50,
+      yMin + (yMax - yMin) * 0.80,
+    ];
+    for (int i = 0; i < yTickEmojis.length && i < yEmojiPos.length; i++) {
+      _drawText(
+        canvas,
+        yTickEmojis[i],
+        Offset(rect.left - 26, _mapY(yEmojiPos[i], rect) - 8),
+        labelStyle,
+      );
     }
 
-    // Center labels and weather icons
+    // X-etiketter + väder
     final stepX = rect.width / (xLabels.length - 1);
     for (int i = 0; i < xLabels.length; i++) {
       final dx = rect.left + stepX * i;
-
-      // Weekday
-      _drawCenteredText(canvas, xLabels[i], Offset(dx, rect.bottom + 6), labelStyle);
-
-      // Weather emoji below the weekday
+      _drawCenteredText(
+        canvas,
+        xLabels[i],
+        Offset(dx, rect.bottom + 6),
+        labelStyle,
+      );
       if (weatherEmojis != null && i < weatherEmojis!.length) {
-        _drawCenteredText(canvas, weatherEmojis![i], Offset(dx, rect.bottom + 22), labelStyle);
+        _drawCenteredText(
+          canvas,
+          weatherEmojis![i],
+          Offset(dx, rect.bottom + 22),
+          labelStyle,
+        );
       }
     }
 
-    // Draw line
-    final pts = List<Offset>.generate(values.length, (i) {
-      final x = rect.left + stepX * i;
-      final y = _mapY(values[i], rect);
-      return Offset(x, y);
-    });
-
+    // Linje (bara där data finns)
     final paint = Paint()
       ..color = color
       ..strokeWidth = 2.6
       ..style = PaintingStyle.stroke
       ..isAntiAlias = true;
 
-    for (int i = 1; i < pts.length; i++) {
-      canvas.drawLine(pts[i - 1], pts[i], paint);
+    Offset? prev;
+    for (int i = 0; i < values.length; i++) {
+      final v = values[i];
+      if (v == null) {
+        prev = null;
+        continue;
+      }
+      final x = rect.left + stepX * i;
+      final y = _mapY(v, rect);
+      final p = Offset(x, y);
+      if (prev != null) canvas.drawLine(prev, p, paint);
+      prev = p;
     }
 
+    // Prickar
     final dotPaint = Paint()..color = color;
-    for (final p in pts) {
-      canvas.drawCircle(p, 3.0, dotPaint);
+    for (int i = 0; i < values.length; i++) {
+      final v = values[i];
+      if (v == null) continue;
+      final x = rect.left + stepX * i;
+      final y = _mapY(v, rect);
+      canvas.drawCircle(Offset(x, y), 3.0, dotPaint);
     }
   }
 
-  // Helper methods for text and positioning
   double _mapY(double v, Rect rect) {
-    final clamped = v.clamp(_minY, _maxY);
-    return rect.bottom - (clamped - _minY) / (_maxY - _minY) * rect.height;
+    final clamped = v.clamp(yMin, yMax);
+    return rect.bottom - (clamped - yMin) / (yMax - yMin) * rect.height;
   }
 
   void _drawText(Canvas canvas, String text, Offset pos, TextStyle? style) {
@@ -527,14 +616,17 @@ class _SingleLineChartPainter extends CustomPainter {
     tp.paint(canvas, pos);
   }
 
-  void _drawCenteredText(Canvas canvas, String text, Offset center, TextStyle? style) {
+  void _drawCenteredText(
+    Canvas canvas,
+    String text,
+    Offset center,
+    TextStyle? style,
+  ) {
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
-            textAlign: TextAlign.center,
+      textAlign: TextAlign.center,
       textDirection: TextDirection.ltr,
     )..layout();
-
-    // Center the text horizontally around the X position (dx)
     final offset = Offset(center.dx - tp.width / 2, center.dy);
     tp.paint(canvas, offset);
   }
